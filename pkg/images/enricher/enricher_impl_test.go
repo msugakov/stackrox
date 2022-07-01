@@ -177,6 +177,13 @@ func (f *fakeRegistryScanner) DataSource() *storage.DataSource {
 	}
 }
 
+func (f *fakeRegistryScanner) Source() *storage.ImageIntegration {
+	return &storage.ImageIntegration{
+		Id:   "id",
+		Name: f.Name(),
+	}
+}
+
 type fakeCVESuppressor struct{}
 
 func (f *fakeCVESuppressor) EnrichImageWithSuppressedCVEs(image *storage.Image) {
