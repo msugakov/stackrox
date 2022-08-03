@@ -61,10 +61,10 @@ func scanImage(ctx context.Context, svc v1.ImageServiceClient, req *scanImageReq
 	defer cancel()
 
 	return svc.ScanImageInternal(ctx, &v1.ScanImageInternalRequest{
-		Image:       req.containerImage,
-		ClusterId:   req.clusterID,
-		Namespace:   req.namespace,
-		PullSecrets: req.pullSecrets,
+		Image:            req.containerImage,
+		ClusterId:        req.clusterID,
+		Namespace:        req.namespace,
+		ImagePullSecrets: req.pullSecrets,
 	})
 }
 
