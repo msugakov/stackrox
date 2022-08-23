@@ -6,6 +6,7 @@ option cc_enable_arenas = true;
 import "google/protobuf/timestamp.proto";
 import "internalapi/sensor/network_enums.proto";
 import "storage/network_flow.proto";
+import "storage/process_indicator.proto";
 
 package sensor;
 
@@ -24,11 +25,11 @@ message NetworkConnectionInfo {
 // NetworkConnection tracks connection information about client and server.
 message NetworkConnection {
 
-    SocketFamily socket_family       = 1;
+    SocketFamily socket_family          = 1;
     NetworkAddress local_address        = 2;
     NetworkAddress remote_address       = 3;
-    storage.L4Protocol protocol            = 4;
-    ClientServerRole role            = 5;
+    storage.L4Protocol protocol         = 4;
+    ClientServerRole role               = 5;
     string container_id                 = 6;
 
     // If this connection was closed, this gives the timestamp when it was closed. If this is unset, we treat it as an
@@ -47,6 +48,8 @@ message NetworkEndpoint {
     // If we're no longer listening on this endpoint, this gives the timestamp when the listen socket
     // was shutdown. If this is unset, we treat it as an actively listening endpoint.
     google.protobuf.Timestamp close_timestamp = 5;
+
+    storage.ProcessSignal process_signal      = 6;
 }
 
 message NetworkAddress {
