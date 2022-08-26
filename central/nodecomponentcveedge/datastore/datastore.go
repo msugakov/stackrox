@@ -24,11 +24,11 @@ type DataStore interface {
 }
 
 // New returns a new instance of a DataStore.
-func New(storage postgres.Store, indexer index.Indexer, searcher search.Searcher) (DataStore, error) {
+func New(storage postgres.Store, indexer index.Indexer, searcher search.Searcher) DataStore {
 	ds := &datastoreImpl{
 		storage:  storage,
 		indexer:  indexer,
 		searcher: searcher,
 	}
-	return ds, nil
+	return ds
 }
