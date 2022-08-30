@@ -337,7 +337,7 @@ class DefaultPoliciesTest extends BaseSpecification {
     def "Verify risk factors on struts deployment: #riskFactor"() {
         given:
         "Check Feature Flags"
-        featureDependancies.each {
+        featureDependencies.each {
             Assume.assumeTrue(FeatureFlagService.isFeatureFlagEnabled(it))
         }
 
@@ -367,7 +367,7 @@ class DefaultPoliciesTest extends BaseSpecification {
         where:
         "data inputs"
 
-        riskFactor                        | maxScore | message   | regex | featureDependancies
+        riskFactor                        | maxScore | message   | regex | featureDependencies
         "Policy Violations"               | 4.0f     | null      | null | []
 
         "Service Reachability"            | 2.0f     |

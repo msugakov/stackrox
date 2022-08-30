@@ -25,7 +25,7 @@ func GetGlobalSearchCategories() set.V1SearchCategorySet {
 		v1.SearchCategory_IMAGE_INTEGRATIONS,
 	)
 
-	if features.NewPolicyCategories.Enabled() {
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
 		globalSearchCategories.Add(v1.SearchCategory_POLICY_CATEGORIES)
 	}
 	return globalSearchCategories

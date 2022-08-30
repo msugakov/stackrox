@@ -12,6 +12,8 @@ import (
 	indexMocks "github.com/stackrox/rox/central/policy/index/mocks"
 	"github.com/stackrox/rox/central/policy/store/boltdb"
 	storeMocks "github.com/stackrox/rox/central/policy/store/mocks"
+	categoriesMocks "github.com/stackrox/rox/central/policycategory/datastore/mocks"
+	policyCategoryMocks "github.com/stackrox/rox/central/policycategory/datastore/mocks"
 	v1 "github.com/stackrox/rox/generated/api/v1"
 	"github.com/stackrox/rox/generated/storage"
 	"github.com/stackrox/rox/pkg/policies"
@@ -26,25 +28,26 @@ func TestPolicyDatastore(t *testing.T) {
 type PolicyDatastoreTestSuite struct {
 	suite.Suite
 
-	mockCtrl          *gomock.Controller
-	store             *storeMocks.MockStore
-	indexer           *indexMocks.MockIndexer
-	datastore         DataStore
-	clusterDatastore  *clusterMocks.MockDataStore
-	notifierDatastore *notifierMocks.MockDataStore
+	mockCtrl            *gomock.Controller
+	store               *storeMocks.MockStore
+	indexer             *indexMocks.MockIndexer
+	datastore           DataStore
+	clusterDatastore    *clusterMocks.MockDataStore
+	notifierDatastore   *notifierMocks.MockDataStore
+	categoriesDatastore *policyCategoryMocks.MockDataStore
 
 	ctx context.Context
 }
 
 func (s *PolicyDatastoreTestSuite) SetupTest() {
 	s.mockCtrl = gomock.NewController(s.T())
-
 	s.store = storeMocks.NewMockStore(s.mockCtrl)
 	s.indexer = indexMocks.NewMockIndexer(s.mockCtrl)
 	s.clusterDatastore = clusterMocks.NewMockDataStore(s.mockCtrl)
 	s.notifierDatastore = notifierMocks.NewMockDataStore(s.mockCtrl)
+	s.categoriesDatastore = categoriesMocks.NewMockDataStore(s.mockCtrl)
 
-	s.datastore = newWithoutDefaults(s.store, s.indexer, nil, s.clusterDatastore, s.notifierDatastore)
+	s.datastore = newWithoutDefaults(s.store, s.indexer, nil, s.clusterDatastore, s.notifierDatastore, s.categoriesDatastore)
 
 	s.ctx = sac.WithAllAccess(context.Background())
 }
@@ -266,6 +269,8 @@ func (s *PolicyDatastoreTestSuite) TestImportOverwrite() {
 	s.indexer.EXPECT().DeletePolicy(existingPolicy2.GetId()).Return(nil)
 	s.store.EXPECT().Upsert(s.ctx, policy2).Return(nil)
 	s.indexer.EXPECT().AddPolicy(policy2).Return(nil)
+
+	s.categoriesDatastore.EXPECT().SetPolicyCategoriesForPolicy(s.ctx, gomock.Any(), gomock.Any()).AnyTimes()
 
 	responses, allSucceeded, err := s.datastore.ImportPolicies(s.ctx, []*storage.Policy{policy1.Clone(), policy2.Clone()}, true)
 	s.NoError(err)

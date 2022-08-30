@@ -92,9 +92,13 @@ class GlobalSearch extends BaseSpecification {
         // If the test case has an expectedResultPrefix, assert that the result starts with the prefix.
         // Doing a prefix match instead of an exact match because we do prefix search, and if a query happens
         // to match something else.
-        if (expectedResultPrefix.size() > 0) {
-            searchResponse.resultsList.each {
-                assert it.name.startsWith(expectedResultPrefix)
+        // If category feature flag is set, policy categories show up as valid search results, however, policy
+        // category names do not match in prefix with policy names
+        if (!FeatureFlagService.isFeatureFlagEnabled("ROX_NEW_POLICY_CATEGORIES")) {
+            if (expectedResultPrefix.size() > 0) {
+                searchResponse.resultsList.each {
+                    assert it.name.startsWith(expectedResultPrefix)
+                }
             }
         }
 

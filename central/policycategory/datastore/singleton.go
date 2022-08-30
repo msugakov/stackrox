@@ -8,6 +8,7 @@ import (
 	policyCategoryStore "github.com/stackrox/rox/central/policycategory/store"
 	policyCategoryPostgres "github.com/stackrox/rox/central/policycategory/store/postgres"
 	"github.com/stackrox/rox/central/policycategory/store/rocksdb"
+	policyCategoryEdgeDS "github.com/stackrox/rox/central/policycategoryedge/datastore"
 	"github.com/stackrox/rox/pkg/defaults/categories"
 	"github.com/stackrox/rox/pkg/features"
 	"github.com/stackrox/rox/pkg/sync"
@@ -21,20 +22,20 @@ var (
 )
 
 func initialize() {
-	var storage policyCategoryStore.Store
+	var store policyCategoryStore.Store
 	var indexer index.Indexer
 
-	if features.PostgresDatastore.Enabled() {
-		storage = policyCategoryPostgres.New(globaldb.GetPostgres())
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
+		store = policyCategoryPostgres.New(globaldb.GetPostgres())
 		indexer = policyCategoryPostgres.NewIndexer(globaldb.GetPostgres())
 	} else {
-		storage = rocksdb.New(globaldb.GetRocksDB())
+		store = rocksdb.New(globaldb.GetRocksDB())
 		indexer = index.New(globalindex.GetGlobalTmpIndex())
 	}
-	addDefaults(storage)
-	searcher := search.New(storage, indexer)
+	addDefaults(store)
+	searcher := search.New(store, indexer)
+	ad = New(store, indexer, searcher, policyCategoryEdgeDS.Singleton())
 
-	ad = New(storage, indexer, searcher)
 }
 
 // Singleton provides the interface for non-service external interaction.

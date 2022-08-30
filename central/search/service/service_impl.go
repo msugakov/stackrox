@@ -83,7 +83,7 @@ func (s *serviceImpl) getSearchFuncs() map[v1.SearchCategory]SearchFunc {
 		v1.SearchCategory_IMAGE_INTEGRATIONS: s.imageIntegrations.SearchImageIntegrations,
 	}
 
-	if features.NewPolicyCategories.Enabled() {
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
 		searchfuncs[v1.SearchCategory_POLICY_CATEGORIES] = s.categories.SearchPolicyCategories
 	}
 
@@ -109,7 +109,7 @@ func (s *serviceImpl) getAutocompleteSearchers() map[v1.SearchCategory]search.Se
 		v1.SearchCategory_IMAGE_INTEGRATIONS: s.imageIntegrations,
 	}
 
-	if features.NewPolicyCategories.Enabled() {
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
 		searchers[v1.SearchCategory_POLICY_CATEGORIES] = s.categories
 	}
 

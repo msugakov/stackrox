@@ -196,7 +196,7 @@ func NewService() Service {
 		WithClusterDataStore(clusterDataStore.Singleton()).
 		WithImageIntegrationStore(imageIntegrationDataStore.Singleton())
 
-	if features.NewPolicyCategories.Enabled() {
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
 		builder = builder.WithPolicyCategoryDataStore(categoryDataStore.Singleton())
 	}
 	return builder.Build()

@@ -44,6 +44,7 @@ import (
 	"github.com/stackrox/rox/pkg/dackbox/utils/queue"
 	"github.com/stackrox/rox/pkg/features"
 	"github.com/stackrox/rox/pkg/fixtures"
+	"github.com/stackrox/rox/pkg/postgres/pgtest"
 	"github.com/stackrox/rox/pkg/rocksdb"
 	"github.com/stackrox/rox/pkg/sac"
 	"github.com/stackrox/rox/pkg/search"
@@ -53,6 +54,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	bolt "go.etcd.io/bbolt"
+	"gorm.io/gorm"
 )
 
 func TestSearchCategoryToOptionsMultiMap(t *testing.T) {
@@ -84,7 +86,7 @@ func TestSearchFuncs(t *testing.T) {
 		WithImageIntegrationStore(imageIntegrationDataStoreMocks.NewMockDataStore(mockCtrl)).
 		WithAggregator(nil)
 
-	if features.NewPolicyCategories.Enabled() {
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
 		builder = builder.WithPolicyCategoryDataStore(categoryDataStoreMocks.NewMockDataStore(mockCtrl))
 	}
 
@@ -110,6 +112,9 @@ type SearchOperationsTestSuite struct {
 	mockCtrl *gomock.Controller
 	rocksDB  *rocksdb.RocksDB
 	boltDB   *bolt.DB
+	ctx      context.Context
+	db       *pgxpool.Pool
+	gormDB   *gorm.DB
 }
 
 func (s *SearchOperationsTestSuite) SetupSuite() {
@@ -117,18 +122,34 @@ func (s *SearchOperationsTestSuite) SetupSuite() {
 }
 
 func (s *SearchOperationsTestSuite) SetupTest() {
-	s.envIsolator.Setenv(features.NewPolicyCategories.EnvVar(), "true")
+
 	s.mockCtrl = gomock.NewController(s.T())
 	s.rocksDB = rocksdbtest.RocksDBForT(s.T())
 	var err error
 	s.boltDB, err = bolthelper.NewTemp(s.T().Name() + "-bolt.db")
 	s.NoError(err)
+
+	s.ctx = context.Background()
+	if features.PostgresDatastore.Enabled() {
+		source := pgtest.GetConnectionString(s.T())
+		config, err := pgxpool.ParseConfig(source)
+		s.Require().NoError(err)
+
+		pool, err := pgxpool.ConnectConfig(s.ctx, config)
+		s.NoError(err)
+		s.gormDB = pgtest.OpenGormDB(s.T(), source)
+		s.db = pool
+	}
 }
 
 func (s *SearchOperationsTestSuite) TearDownTest() {
 	s.envIsolator.RestoreAll()
 	s.mockCtrl.Finish()
 	s.rocksDB.Close()
+	if features.PostgresDatastore.Enabled() {
+		s.db.Close()
+		pgtest.CloseGormDB(s.T(), s.gormDB)
+	}
 }
 
 func (s *SearchOperationsTestSuite) TestAutocomplete() {
@@ -188,7 +209,7 @@ func (s *SearchOperationsTestSuite) TestAutocomplete() {
 		WithClusterDataStore(clusterDataStoreMocks.NewMockDataStore(s.mockCtrl)).
 		WithAggregator(nil)
 
-	if features.NewPolicyCategories.Enabled() {
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
 		builder = builder.WithPolicyCategoryDataStore(categoryDataStoreMocks.NewMockDataStore(s.mockCtrl))
 	}
 
@@ -255,7 +276,7 @@ func (s *SearchOperationsTestSuite) TestAutocompleteForEnums() {
 	policyIndexer := policyIndex.New(idx)
 	s.NoError(policyIndexer.AddPolicy(fixtures.GetPolicy()))
 	policySearcher := policySearcher.New(policyStore, policyIndexer)
-	ds := policyDatastore.New(policyStore, policyIndexer, policySearcher, nil, nil)
+	ds := policyDatastore.New(policyStore, policyIndexer, policySearcher, nil, nil, nil)
 
 	builder := NewBuilder().
 		WithAlertStore(alertMocks.NewMockDataStore(s.mockCtrl)).
@@ -271,7 +292,7 @@ func (s *SearchOperationsTestSuite) TestAutocompleteForEnums() {
 		WithClusterDataStore(clusterDataStoreMocks.NewMockDataStore(s.mockCtrl)).
 		WithAggregator(nil)
 
-	if features.NewPolicyCategories.Enabled() {
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
 		builder = builder.WithPolicyCategoryDataStore(categoryDataStoreMocks.NewMockDataStore(s.mockCtrl))
 	}
 	service := builder.Build().(*serviceImpl)
@@ -334,7 +355,7 @@ func (s *SearchOperationsTestSuite) TestAutocompleteAuthz() {
 		WithClusterDataStore(clusterDataStoreMocks.NewMockDataStore(s.mockCtrl)).
 		WithAggregator(nil)
 
-	if features.NewPolicyCategories.Enabled() {
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
 		builder = builder.WithPolicyCategoryDataStore(categoryDataStoreMocks.NewMockDataStore(s.mockCtrl))
 	}
 	service := builder.Build().(*serviceImpl)
@@ -417,7 +438,7 @@ func (s *SearchOperationsTestSuite) TestSearchAuthz() {
 		WithImageIntegrationStore(imageIntegrationDataStoreMocks.NewMockDataStore(s.mockCtrl)).
 		WithAggregator(nil)
 
-	if features.NewPolicyCategories.Enabled() {
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
 		builder = builder.WithPolicyCategoryDataStore(categoryDataStoreMocks.NewMockDataStore(s.mockCtrl))
 	}
 

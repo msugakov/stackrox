@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/stackrox/rox/central/policycategory/index"
-	categoryMapping "github.com/stackrox/rox/central/policycategory/index/mappings"
 	"github.com/stackrox/rox/central/policycategory/store"
 	"github.com/stackrox/rox/central/role/resources"
 	v1 "github.com/stackrox/rox/generated/api/v1"
@@ -13,7 +12,7 @@ import (
 	"github.com/stackrox/rox/pkg/search"
 	"github.com/stackrox/rox/pkg/search/blevesearch"
 	"github.com/stackrox/rox/pkg/search/paginated"
-	"github.com/stackrox/rox/pkg/search/sortfields"
+	"github.com/stackrox/rox/pkg/search/policycategory"
 )
 
 var (
@@ -90,8 +89,8 @@ func (s *searcherImpl) searchCategories(ctx context.Context, q *v1.Query) ([]*st
 // Format the search functionality of the indexer to be filtered (for sac) and paginated.
 func formatSearcher(unsafeSearcher blevesearch.UnsafeSearcher) search.Searcher {
 	safeSearcher := blevesearch.WrapUnsafeSearcherAsSearcher(unsafeSearcher)
-	transformedSortFieldSearcher := sortfields.TransformSortFields(safeSearcher, categoryMapping.OptionsMap)
-	paginatedSearcher := paginated.Paginated(transformedSortFieldSearcher)
+	transformedCategoryNameSearcher := policycategory.TransformCategoryNameFields(safeSearcher)
+	paginatedSearcher := paginated.Paginated(transformedCategoryNameSearcher)
 	return paginated.WithDefaultSortOption(paginatedSearcher, defaultSortOption)
 }
 

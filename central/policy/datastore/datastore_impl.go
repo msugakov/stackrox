@@ -13,6 +13,7 @@ import (
 	"github.com/stackrox/rox/central/policy/store"
 	"github.com/stackrox/rox/central/policy/store/boltdb"
 	"github.com/stackrox/rox/central/policy/utils"
+	categoriesDataStore "github.com/stackrox/rox/central/policycategory/datastore"
 	"github.com/stackrox/rox/central/role/resources"
 	v1 "github.com/stackrox/rox/generated/api/v1"
 	"github.com/stackrox/rox/generated/storage"
@@ -42,8 +43,9 @@ type datastoreImpl struct {
 	searcher    search.Searcher
 	policyMutex sync.Mutex
 
-	clusterDatastore  clusterDS.DataStore
-	notifierDatastore notifierDS.DataStore
+	clusterDatastore    clusterDS.DataStore
+	notifierDatastore   notifierDS.DataStore
+	categoriesDatastore categoriesDataStore.DataStore
 }
 
 func (ds *datastoreImpl) buildIndex() error {
@@ -91,15 +93,41 @@ func (ds *datastoreImpl) GetPolicy(ctx context.Context, id string) (*storage.Pol
 	if err != nil || !exists {
 		return nil, false, err
 	}
+
+	err = ds.fillCategoryNames(ctx, []*storage.Policy{policy})
+	if err != nil {
+		return nil, true, err
+	}
+
 	return policy, true, nil
 }
 
+func (ds *datastoreImpl) fillCategoryNames(ctx context.Context, policies []*storage.Policy) error {
+	if !features.NewPolicyCategories.Enabled() || !features.PostgresDatastore.Enabled() {
+		return nil
+	}
+	for _, p := range policies {
+		categories, err := ds.categoriesDatastore.GetPolicyCategoriesForPolicy(ctx, p.GetId())
+		if err != nil {
+			return err
+		}
+		for _, c := range categories {
+			p.Categories = append(p.Categories, c.GetName())
+		}
+	}
+	return nil
+}
 func (ds *datastoreImpl) GetPolicies(ctx context.Context, ids []string) ([]*storage.Policy, []int, error) {
 	if ok, err := policySAC.ReadAllowed(ctx); err != nil || !ok {
 		return nil, nil, err
 	}
 
 	policies, missingIndices, err := ds.storage.GetMany(ctx, ids)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = ds.fillCategoryNames(ctx, policies)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -115,6 +143,12 @@ func (ds *datastoreImpl) GetAllPolicies(ctx context.Context) ([]*storage.Policy,
 	if err != nil {
 		return nil, err
 	}
+
+	err = ds.fillCategoryNames(ctx, policies)
+	if err != nil {
+		return nil, err
+	}
+
 	return policies, err
 }
 
@@ -131,6 +165,10 @@ func (ds *datastoreImpl) GetPolicyByName(ctx context.Context, name string) (*sto
 
 	for _, p := range policies {
 		if p.GetName() == name {
+			err = ds.fillCategoryNames(ctx, []*storage.Policy{p})
+			if err != nil {
+				return nil, true, err
+			}
 			return p, true, nil
 		}
 	}
@@ -168,10 +206,18 @@ func (ds *datastoreImpl) AddPolicy(ctx context.Context, policy *storage.Policy) 
 	// Any policy added after startup must be marked custom policy.
 	markPoliciesAsCustom(policy)
 
-	// No need to lock here because nobody can update the policy
-	// until this function returns and they receive the id.
+	// Stash away the category names, since they need to be erased on storage. But the policy insert must happen first,
+	// to get an ID, to satisfy foreign key constraints when policy category edges are added.
+	policyCategories := policy.GetCategories()
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
+		policy.Categories = []string{}
+	}
 	err = ds.storage.Upsert(ctx, policy)
+	if err != nil {
+		return policy.Id, err
+	}
 
+	err = ds.categoriesDatastore.SetPolicyCategoriesForPolicy(ctx, policy.GetId(), policyCategories)
 	if err != nil {
 		return policy.Id, err
 	}
@@ -195,6 +241,15 @@ func (ds *datastoreImpl) UpdatePolicy(ctx context.Context, policy *storage.Polic
 
 	ds.policyMutex.Lock()
 	defer ds.policyMutex.Unlock()
+	// if feature flag turned on, check if categories need to be created/new policy category edges need to be created/
+	// existing policy category edges need to be removed?
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
+		if err := ds.categoriesDatastore.SetPolicyCategoriesForPolicy(ctx, policy.GetId(), policy.GetCategories()); err != nil {
+			return err
+		}
+		policy.Categories = []string{}
+	}
+
 	if err := ds.storage.Upsert(ctx, policy); err != nil {
 		return err
 	}
@@ -279,6 +334,10 @@ func (ds *datastoreImpl) importPolicy(ctx context.Context, policy *storage.Polic
 	var err error
 	if overwrite {
 		err = ds.importOverwrite(ctx, policy, policyNameIDMap)
+		if err != nil {
+			result.Errors = getImportErrorsFromError(err)
+			return result
+		}
 	} else {
 		var importErrors []*v1.ImportPolicyError
 
@@ -315,12 +374,26 @@ func (ds *datastoreImpl) importPolicy(ctx context.Context, policy *storage.Polic
 			result.Errors = importErrors
 			return result
 		}
+
+		policyCategories := policy.GetCategories()
+		if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
+			policy.Categories = []string{}
+		}
 		err = ds.storage.Upsert(ctx, policy)
+		if err != nil {
+			result.Errors = getImportErrorsFromError(err)
+			return result
+		}
+
+		if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
+			err = ds.categoriesDatastore.SetPolicyCategoriesForPolicy(ctx, policy.GetId(), policyCategories)
+			if err != nil {
+				result.Errors = getImportErrorsFromError(err)
+				return result
+			}
+		}
 	}
-	if err != nil {
-		result.Errors = getImportErrorsFromError(err)
-		return result
-	}
+
 	err = ds.indexer.AddPolicy(policy)
 	if err != nil {
 		result.Errors = getImportErrorsFromError(err)
@@ -359,7 +432,20 @@ func (ds *datastoreImpl) importOverwrite(ctx context.Context, policy *storage.Po
 	}
 
 	// This should never create a name violation because we just removed any ID/name conflicts
-	return ds.storage.Upsert(ctx, policy)
+	policyCategories := policy.GetCategories()
+	if features.NewPolicyCategories.Enabled() && features.PostgresDatastore.Enabled() {
+		policy.Categories = []string{}
+	}
+	err := ds.storage.Upsert(ctx, policy)
+	if err != nil {
+		return err
+	}
+	err = ds.categoriesDatastore.SetPolicyCategoriesForPolicy(ctx, policy.GetId(), policyCategories)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getImportErrorsFromError(err error) []*v1.ImportPolicyError {
