@@ -89,7 +89,7 @@ jobs:
         uses: ./.github/actions/cache-go-dependencies
         
       - name: Cache UI dependencies
-      - uses: ./.github/actions/cache-ui-dependencies
+        uses: ./.github/actions/cache-ui-dependencies
 
       - name: PR labels
         uses: joerick/pr-labels-action@v1.0.6
