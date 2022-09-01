@@ -11,6 +11,7 @@ import (
 	rbacUtils "github.com/stackrox/rox/central/rbac/utils"
 	v1 "github.com/stackrox/rox/generated/api/v1"
 	"github.com/stackrox/rox/generated/storage"
+	"github.com/stackrox/rox/pkg/features"
 	"github.com/stackrox/rox/pkg/k8srbac"
 	pkgMetrics "github.com/stackrox/rox/pkg/metrics"
 	"github.com/stackrox/rox/pkg/search"
@@ -100,14 +101,40 @@ func (resolver *Resolver) getFilteredSubjects(ctx context.Context, query *v1.Que
 		return nil, err
 	}
 
-	bindings, err := resolver.K8sRoleBindingStore.SearchRawRoleBindings(ctx, query)
+	localQuery := query.Clone()
+
+	// Subject return only users and groups, there is a separate resolver for service accounts.
+	// If running in postgres, we need to do the filtering and sorting in the DB itself
+	// So update the query to add the filters iff it's not already in there
+	if features.PostgresDatastore.Enabled() {
+		foundKindFilter := false
+		search.FilterQuery(localQuery, func(bq *v1.BaseQuery) bool {
+			matchFieldQuery, ok := bq.GetQuery().(*v1.BaseQuery_MatchFieldQuery)
+			if ok {
+				if matchFieldQuery.MatchFieldQuery.GetField() == search.SubjectKind.String() &&
+					(matchFieldQuery.MatchFieldQuery.GetValue() == storage.SubjectKind_USER.String() || matchFieldQuery.MatchFieldQuery.GetValue() == storage.SubjectKind_GROUP.String()) {
+					foundKindFilter = true
+				}
+			}
+			return true
+		})
+		if !foundKindFilter {
+			// Also need to move pagination to the outer query
+			pagination := localQuery.GetPagination()
+			localQuery.Pagination = nil
+			localQuery = search.ConjunctionQuery(localQuery, search.NewQueryBuilder().AddExactMatches(search.SubjectKind, storage.SubjectKind_USER.String(), storage.SubjectKind_GROUP.String()).ProtoQuery())
+			localQuery.Pagination = pagination
+		}
+	}
+
+	bindings, err := resolver.K8sRoleBindingStore.SearchRawRoleBindings(ctx, localQuery)
 	if err != nil {
 		return nil, err
 	}
 
 	// Subject return only users and groups, there is a separate resolver for service accounts.
 	subjects := k8srbac.GetAllSubjects(bindings, storage.SubjectKind_USER, storage.SubjectKind_GROUP)
-	return service.GetFilteredSubjects(query, subjects)
+	return service.GetFilteredSubjects(localQuery, subjects)
 }
 
 func (resolver *subjectResolver) Type(ctx context.Context) (string, error) {
