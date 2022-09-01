@@ -174,9 +174,8 @@ func setUpIntegrationParams(ctx context.Context, imageIntegration *storage.Image
 	switch config := imageIntegration.GetIntegrationConfig().(type) {
 	case *storage.ImageIntegration_Docker:
 		dockerCfg := config.Docker
-		var validTLS bool
-		validTLS, err = tlscheck.CheckTLS(ctx, dockerCfg.GetEndpoint())
-		if err != nil {
+		validTLS, tlsErr := tlscheck.CheckTLS(ctx, dockerCfg.GetEndpoint())
+		if tlsErr != nil {
 			log.Debugf("reaching out for TLS check to %s: %v", dockerCfg.GetEndpoint(), err)
 			// Assume TLS is true
 			validTLS = true
@@ -270,7 +269,7 @@ func (s *pipelineImpl) Run(ctx context.Context, clusterID string, msg *central.M
 
 	description, matches, err := setUpIntegrationParams(ctx, imageIntegration)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "setting up integration params for %q", imageIntegration.GetId())
 	}
 	source := imageIntegration.GetSource()
 	if source == nil {

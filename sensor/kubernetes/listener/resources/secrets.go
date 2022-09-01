@@ -256,7 +256,7 @@ func (s *secretDispatcher) processDockerConfigEvent(secret, oldSecret *v1.Secret
 			} else {
 				sensorEvents = append(sensorEvents, &central.SensorEvent{
 					// Only update is supported at this time.
-					Action: central.ResourceAction_UPDATE_RESOURCE,
+					Action: action,
 					Resource: &central.SensorEvent_ImageIntegration{
 						ImageIntegration: ii,
 					},
