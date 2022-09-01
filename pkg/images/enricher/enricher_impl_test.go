@@ -845,6 +845,7 @@ func TestEnrichWithSignature_Failures(t *testing.T) {
 
 	emptyRegistrySetMock := registryMocks.NewMockSet(ctrl)
 	emptyRegistrySetMock.EXPECT().IsEmpty().Return(true).AnyTimes()
+	emptyRegistrySetMock.EXPECT().GetAll().Return(nil).AnyTimes()
 
 	nonMatchingRegistrySetMock := registryMocks.NewMockSet(ctrl)
 	nonMatchingRegistrySetMock.EXPECT().IsEmpty().Return(false).AnyTimes()

@@ -135,10 +135,10 @@ func newSecretDispatcher(regStore *registry.Store) *secretDispatcher {
 	}
 }
 
-func derivedID(secret *v1.Secret, registry string) (string, error) {
+func deriveIDFromSecret(secret *v1.Secret, registry string) (string, error) {
 	rootUUID, err := uuid.FromString(string(secret.UID))
 	if err != nil {
-		return "", errors.Wrapf(err, "converting %q to uuid", secret.UID)
+		return "", errors.Wrapf(err, "converting secret ID %q to uuid", secret.UID)
 	}
 	id := uuid.NewV5(rootUUID, registry).String()
 	return id, nil
@@ -152,9 +152,9 @@ func DockerConfigToImageIntegration(secret *v1.Secret, registry string, dce conf
 		registryType = rhel.RedHatRegistryType
 	}
 
-	id, err := derivedID(secret, registry)
+	id, err := deriveIDFromSecret(secret, registry)
 	if err != nil {
-		return nil, errors.Wrapf(err, "converting %q to uuid", secret.UID)
+		return nil, errors.Wrapf(err, "deriving image integration ID from secret %q", secret.UID)
 	}
 	return &storage.ImageIntegration{
 		Id:         id,
@@ -206,7 +206,7 @@ func getDockerConfigFromSecret(secret *v1.Secret) *config.DockerConfig {
 	return &dockerConfig
 }
 
-func idSetFromSecret(secret *v1.Secret) (set.StringSet, error) {
+func imageIntegationIDSetFromSecret(secret *v1.Secret) (set.StringSet, error) {
 	if secret == nil {
 		return nil, nil
 	}
@@ -215,15 +215,15 @@ func idSetFromSecret(secret *v1.Secret) (set.StringSet, error) {
 		return nil, nil
 	}
 	dockerConfig := *dockerConfigPtr
-	registrySet := set.NewStringSet()
+	imageIntegrationIDSet := set.NewStringSet()
 	for reg := range dockerConfig {
-		id, err := derivedID(secret, reg)
+		id, err := deriveIDFromSecret(secret, reg)
 		if err != nil {
 			return nil, err
 		}
-		registrySet.Add(id)
+		imageIntegrationIDSet.Add(id)
 	}
-	return registrySet, nil
+	return imageIntegrationIDSet, nil
 }
 
 func (s *secretDispatcher) processDockerConfigEvent(secret, oldSecret *v1.Secret, action central.ResourceAction) []*central.SensorEvent {
@@ -252,7 +252,7 @@ func (s *secretDispatcher) processDockerConfigEvent(secret, oldSecret *v1.Secret
 		} else {
 			ii, err := DockerConfigToImageIntegration(secret, registry, dce)
 			if err != nil {
-				log.Errorf("unable to create docker config for secret %s %v", secret.GetName(), err)
+				log.Errorf("unable to create docker config for secret %s: %v", secret.GetName(), err)
 			} else {
 				sensorEvents = append(sensorEvents, &central.SensorEvent{
 					// Only update is supported at this time.
@@ -271,9 +271,9 @@ func (s *secretDispatcher) processDockerConfigEvent(secret, oldSecret *v1.Secret
 		})
 	}
 	// Compute diff between old and new secret to automatically clean up delete secrets
-	oldIntegrations, err := idSetFromSecret(oldSecret)
+	oldIntegrations, err := imageIntegationIDSetFromSecret(oldSecret)
 	if err != nil {
-		log.Errorf("error getting ids from old secret: %v", err)
+		log.Errorf("error getting ids from old secret %q: %v", string(oldSecret.UID), err)
 	} else {
 		for id := range oldIntegrations.Difference(newIntegrationSet) {
 			sensorEvents = append(sensorEvents, &central.SensorEvent{

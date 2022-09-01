@@ -6,8 +6,8 @@ var (
 	dsInit   sync.Once
 	depStore *DeploymentStore
 
-	sasInit  sync.Once
-	sasStore *ServiceAccountStore
+	saInit  sync.Once
+	saStore *ServiceAccountStore
 
 	psInit   sync.Once
 	podStore *PodStore
@@ -26,10 +26,10 @@ func DeploymentStoreSingleton() *DeploymentStore {
 
 // ServiceAccountStoreSingleton returns a singleton of the ServiceAccountStore
 func ServiceAccountStoreSingleton() *ServiceAccountStore {
-	sasInit.Do(func() {
-		sasStore = newServiceAccountStore()
+	saInit.Do(func() {
+		saStore = newServiceAccountStore()
 	})
-	return sasStore
+	return saStore
 }
 
 // PodStoreSingleton returns a singleton of the PodStore
