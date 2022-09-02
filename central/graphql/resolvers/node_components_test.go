@@ -33,7 +33,7 @@ import (
 	"github.com/stackrox/rox/central/sensor/service/connection"
 	v1 "github.com/stackrox/rox/generated/api/v1"
 	"github.com/stackrox/rox/generated/storage"
-	"github.com/stackrox/rox/pkg/dackbox/concurrency"
+	dackboxConcurrency "github.com/stackrox/rox/pkg/dackbox/concurrency"
 	"github.com/stackrox/rox/pkg/features"
 	"github.com/stackrox/rox/pkg/grpc/authz/allow"
 	"github.com/stackrox/rox/pkg/postgres/pgtest"
@@ -94,7 +94,7 @@ func (s *GraphQLNodeComponentTestSuite) SetupSuite() {
 	nodeCVEStore := nodeCVEPostgres.CreateTableAndNewStore(s.ctx, s.db, s.gormDB)
 	nodeCVEIndexer := nodeCVEPostgres.NewIndexer(s.db)
 	nodeCVESearcher := nodeCVESearch.New(nodeCVEStore, nodeCVEIndexer)
-	nodeCVEDatastore, err := nodeCVEDataStore.New(nodeCVEStore, nodeCVEIndexer, nodeCVESearcher, concurrency.NewKeyFence())
+	nodeCVEDatastore, err := nodeCVEDataStore.New(nodeCVEStore, nodeCVEIndexer, nodeCVESearcher, dackboxConcurrency.NewKeyFence())
 	s.NoError(err, "Failed to create nodeCVEDatastore")
 	s.resolver.NodeCVEDataStore = nodeCVEDatastore
 

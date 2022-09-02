@@ -249,7 +249,7 @@ func createNodeCVEDatastoreForPostgres(t testing.TB, db *pgxpool.Pool, gormDB *g
 	return datastore
 }
 
-func NodeComponentCVEEdgeDatastoreForPostgres(_ testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) nodeComponentCVEEdgeDS.DataStore {
+func createNodeComponentCVEEdgeDatastoreForPostgres(_ testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) nodeComponentCVEEdgeDS.DataStore {
 	if !features.PostgresDatastore.Enabled() {
 		utils.CrashOnError(errors.New("Cannot create datastore with postgres disabled"))
 	}
