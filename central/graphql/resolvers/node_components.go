@@ -2,21 +2,29 @@ package resolvers
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/graph-gophers/graphql-go"
 	"github.com/pkg/errors"
+	cveConverter "github.com/stackrox/rox/central/cve/converter/utils"
 	"github.com/stackrox/rox/central/graphql/resolvers/embeddedobjs"
 	"github.com/stackrox/rox/central/graphql/resolvers/loaders"
 	"github.com/stackrox/rox/central/metrics"
 	"github.com/stackrox/rox/central/node/mappings"
 	v1 "github.com/stackrox/rox/generated/api/v1"
 	"github.com/stackrox/rox/generated/storage"
+	"github.com/stackrox/rox/pkg/cve"
 	"github.com/stackrox/rox/pkg/features"
 	pkgMetrics "github.com/stackrox/rox/pkg/metrics"
 	"github.com/stackrox/rox/pkg/search"
+	"github.com/stackrox/rox/pkg/search/predicate"
 	"github.com/stackrox/rox/pkg/search/scoped"
 	"github.com/stackrox/rox/pkg/utils"
+)
+
+var (
+	nodeComponentPredicateFactory = predicate.NewFactory("component", &storage.EmbeddedNodeScanComponent{})
 )
 
 func init() {
@@ -195,6 +203,12 @@ func (resolver *nodeComponentResolver) FixedIn(ctx context.Context) string {
 // LastScanned is the last time the node component was scanned in a node.
 func (resolver *nodeComponentResolver) LastScanned(_ context.Context) (*graphql.Time, error) {
 	defer metrics.SetGraphQLOperationDurationTime(time.Now(), pkgMetrics.NodeComponents, "LastScanned")
+
+	// Short path. Full image is embedded when image scan resolver is called.
+	if scanTime := embeddedobjs.NodeComponentLastScannedFromContext(resolver.ctx); scanTime != nil {
+		return timestamp(scanTime)
+	}
+
 	nodeLoader, err := loaders.GetNodeLoader(resolver.ctx)
 	if err != nil {
 		return nil, err
@@ -252,7 +266,7 @@ func (resolver *nodeComponentResolver) NodeVulnerabilities(ctx context.Context, 
 
 	// Short path. Full node is embedded when node scan resolver is called.
 	embeddedComponent := embeddedobjs.NodeComponentFromContext(resolver.ctx)
-	if embeddedComponent == nil {
+	if embeddedComponent == nil || !features.PostgresDatastore.Enabled() {
 		return resolver.root.NodeVulnerabilities(resolver.withNodeComponentScope(ctx), args)
 	}
 
@@ -260,7 +274,7 @@ func (resolver *nodeComponentResolver) NodeVulnerabilities(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-
+	return getNodeCVEResolvers(resolver.ctx, resolver.root, embeddedobjs.OSFromContext(resolver.ctx), embeddedComponent.GetVulnerabilities(), query)
 }
 
 // NodeVulnerabilityCount resolves the number of node vulnerabilities contained in the node component
@@ -326,6 +340,22 @@ func (resolver *nodeComponentResolver) TopNodeVulnerability(ctx context.Context)
 		return res, nil
 	}
 
+	// Short path. Full node is embedded when node scan resolver is called.
+	if embeddedComponent := embeddedobjs.NodeComponentFromContext(resolver.ctx); embeddedComponent != nil {
+		var topVuln *storage.NodeVulnerability
+		for _, vuln := range embeddedComponent.GetVulnerabilities() {
+			if topVuln == nil || vuln.GetCvss() > topVuln.GetCvss() {
+				topVuln = vuln
+			}
+		}
+		if topVuln == nil {
+			return nil, nil
+		}
+		return resolver.root.wrapNodeCVE(
+			cveConverter.NodeVulnerabilityToNodeCVE(embeddedobjs.OSFromContext(resolver.ctx), topVuln), true, nil,
+		)
+	}
+
 	return resolver.root.TopNodeVulnerability(resolver.withNodeComponentScope(ctx), RawQuery{})
 }
 
@@ -335,10 +365,46 @@ func (resolver *nodeComponentResolver) UnusedVarSink(_ context.Context, _ RawQue
 }
 
 func getNodeCVEResolvers(ctx context.Context, root *Resolver, os string, vulns []*storage.NodeVulnerability, query *v1.Query) ([]NodeVulnerabilityResolver, error) {
-	query, _ = search.FilterQueryWithMap(query, mappings.VulnerabilityOptionsMap)
-	predicate, err := vulnPredicateFactory.GeneratePredicate(query)
+	query, _ = search.FilterQueryWithMap(query, mappings.NodeVulnerabilityOptionsMap)
+	predicate, err := nodeVulnerabilityPredicateFactory.GeneratePredicate(query)
 	if err != nil {
 		return nil, err
 	}
 
+	// Use the nodes to map CVEs to the nodes and components.
+	idToVals := make(map[string]*nodeCVEResolver)
+	for _, vuln := range vulns {
+		if !predicate.Matches(vuln) {
+			continue
+		}
+		id := cve.ID(vuln.GetCveBaseInfo().GetCve(), os)
+		if _, exists := idToVals[id]; !exists {
+			converted := cveConverter.NodeVulnerabilityToNodeCVE(os, vuln)
+			resolver, err := root.wrapNodeCVE(converted, true, nil)
+			if err != nil {
+				return nil, err
+			}
+			resolver.ctx = embeddedobjs.NodeVulnContext(ctx, vuln)
+			idToVals[id] = resolver
+		}
+	}
+
+	// For now, sort by ID.
+	resolvers := make([]*nodeCVEResolver, 0, len(idToVals))
+	for _, vuln := range idToVals {
+		resolvers = append(resolvers, vuln)
+	}
+	if len(query.GetPagination().GetSortOptions()) == 0 {
+		sort.SliceStable(resolvers, func(i, j int) bool {
+			return resolvers[i].data.GetId() < resolvers[j].data.GetId()
+		})
+	}
+	resolverI := make([]NodeVulnerabilityResolver, 0, len(resolvers))
+	for _, resolver := range resolvers {
+		resolverI = append(resolverI, resolver)
+	}
+	ret, err := paginationWrapper{
+		pv: query.GetPagination(),
+	}.paginate(resolverI, nil)
+	return ret.([]NodeVulnerabilityResolver), err
 }

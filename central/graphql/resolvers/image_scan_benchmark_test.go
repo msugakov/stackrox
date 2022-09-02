@@ -76,7 +76,7 @@ func BenchmarkImageResolver(b *testing.B) {
 	imageComponentDataStore := createImageComponentDatastore(b, mockCtrl, db, gormDB)
 	cveDataStore := createImageCVEDatastore(b, db, gormDB)
 	componentCVEEdgeDataStore := createImageComponentCVEEdgeDatastore(b, db, gormDB)
-	resolver, schema := setupResolver(b, imageDataStore, imageComponentDataStore, cveDataStore, componentCVEEdgeDataStore)
+	resolver, schema := setupResolverForImageGraphQLTests(b, imageDataStore, imageComponentDataStore, cveDataStore, componentCVEEdgeDataStore)
 	ctx := contextWithImagePerm(b, mockCtrl)
 
 	images := getTestImages(100)

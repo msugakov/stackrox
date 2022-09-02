@@ -84,7 +84,7 @@ func (suite *NodePostgresDataStoreTestSuite) SetupTest() {
 
 	suite.mockCtrl = gomock.NewController(suite.T())
 	suite.mockRisk = mockRisks.NewMockDataStore(suite.mockCtrl)
-	storage := postgres.CreateTableAndNewStore(suite.ctx, suite.T(), suite.db, suite.gormDB, false)
+	storage := postgres.CreateTableAndNewStore(suite.ctx, suite.db, suite.gormDB, false)
 	indexer := postgres.NewIndexer(suite.db)
 	searcher := search.NewV2(storage, indexer)
 	suite.datastore = NewWithPostgres(storage, indexer, searcher, suite.mockRisk, ranking.NewRanker(), ranking.NewRanker())
@@ -376,7 +376,7 @@ func (suite *NodePostgresDataStoreTestSuite) TestSearchByComponent() {
 // Test sort by Component search label sorts by Component+Version to ensure backward compatibility.
 func (suite *NodePostgresDataStoreTestSuite) TestSortByComponent() {
 	ctx := sac.WithAllAccess(context.Background())
-	node := fixtures.GetNodeWithUniqueComponents()
+	node := fixtures.GetNodeWithUniqueComponents(5)
 	converter.FillV2NodeVulnerabilities(node)
 	componentIDs := make([]string, 0, len(node.GetScan().GetComponents()))
 	for _, component := range node.GetScan().GetComponents() {
@@ -463,7 +463,7 @@ func (suite *NodePostgresDataStoreTestSuite) deleteTestNodes(ctx context.Context
 
 func (suite *NodePostgresDataStoreTestSuite) TestOrphanedNodeTreeDeletion() {
 	ctx := sac.WithAllAccess(context.Background())
-	testNode := fixtures.GetNodeWithUniqueComponents()
+	testNode := fixtures.GetNodeWithUniqueComponents(5)
 	converter.MoveNodeVulnsToNewField(testNode)
 	suite.NoError(suite.datastore.UpsertNode(ctx, testNode))
 
@@ -618,6 +618,33 @@ func (suite *NodePostgresDataStoreTestSuite) TestOrphanedNodeTreeDeletion() {
 	count, err = suite.datastore.Count(ctx, pkgSearch.EmptyQuery())
 	suite.NoError(err)
 	suite.Equal(0, count)
+}
+
+func (suite *NodePostgresDataStoreTestSuite) TestGetManyNodeMetadata() {
+	ctx := sac.WithAllAccess(context.Background())
+	testNode1 := fixtures.GetNodeWithUniqueComponents(5)
+	converter.MoveNodeVulnsToNewField(testNode1)
+	suite.NoError(suite.datastore.UpsertNode(ctx, testNode1))
+
+	testNode2 := testNode1.Clone()
+	testNode2.Id = "id2"
+	suite.NoError(suite.datastore.UpsertNode(ctx, testNode2))
+
+	testNode3 := testNode1.Clone()
+	testNode3.Id = "id3"
+	suite.NoError(suite.datastore.UpsertNode(ctx, testNode3))
+
+	storedNodes, err := suite.datastore.GetManyNodeMetadata(ctx, []string{testNode1.Id, testNode2.Id, testNode3.Id})
+	suite.NoError(err)
+	suite.Len(storedNodes, 3)
+
+	testNode1.Scan.Components = nil
+	testNode1.Priority = 1
+	testNode2.Scan.Components = nil
+	testNode2.Priority = 1
+	testNode3.Scan.Components = nil
+	testNode3.Priority = 1
+	suite.ElementsMatch([]*storage.Node{testNode1, testNode2, testNode3}, storedNodes)
 }
 
 func getTestNodeForPostgres(id, name string) *storage.Node {

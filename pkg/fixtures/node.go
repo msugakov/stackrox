@@ -22,10 +22,9 @@ func GetNode() *storage.Node {
 }
 
 // GetNodeWithUniqueComponents returns a mock Node where each component is unique
-func GetNodeWithUniqueComponents() *storage.Node {
-	componentCount := 5
-	components := make([]*storage.EmbeddedNodeScanComponent, 0, componentCount)
-	for i := 0; i < componentCount; i++ {
+func GetNodeWithUniqueComponents(numComponents int) *storage.Node {
+	components := make([]*storage.EmbeddedNodeScanComponent, 0, numComponents)
+	for i := 0; i < numComponents; i++ {
 		components = append(components, &storage.EmbeddedNodeScanComponent{
 			Name:    fmt.Sprintf("name-%d", i),
 			Version: fmt.Sprintf("%d.2.3.4", i),
@@ -42,6 +41,9 @@ func getNodeWithComponents(components []*storage.EmbeddedNodeScanComponent) *sto
 		Scan: &storage.NodeScan{
 			ScanTime:   types.TimestampNow(),
 			Components: components,
+		},
+		SetComponents: &storage.Node_Components{
+			Components: int32(len(components)),
 		},
 	}
 }

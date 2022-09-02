@@ -100,7 +100,7 @@ func (s *GraphQLNodeComponentTestSuite) SetupSuite() {
 
 	// node datastore
 	riskMock := mockRisks.NewMockDataStore(gomock.NewController(s.T()))
-	nodeStore := nodePostgres.CreateTableAndNewStore(s.ctx, s.T(), s.db, s.gormDB, false)
+	nodeStore := nodePostgres.CreateTableAndNewStore(s.ctx, s.db, s.gormDB, false)
 	nodeIndexer := nodePostgres.NewIndexer(s.db)
 	nodeSearcher := nodeSearch.NewV2(nodeStore, nodeIndexer)
 	nodePostgresDataStore := nodeDackboxDataStore.NewWithPostgres(nodeStore, nodeIndexer, nodeSearcher, riskMock, ranking.NewRanker(), ranking.NewRanker())
