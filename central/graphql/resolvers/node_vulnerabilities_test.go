@@ -33,7 +33,7 @@ import (
 	"github.com/stackrox/rox/central/sensor/service/connection"
 	v1 "github.com/stackrox/rox/generated/api/v1"
 	"github.com/stackrox/rox/generated/storage"
-	"github.com/stackrox/rox/pkg/dackbox/concurrency"
+	dackboxConcurrency "github.com/stackrox/rox/pkg/dackbox/concurrency"
 	"github.com/stackrox/rox/pkg/features"
 	"github.com/stackrox/rox/pkg/grpc/authz/allow"
 	"github.com/stackrox/rox/pkg/postgres/pgtest"
@@ -101,7 +101,7 @@ func (s *GraphQLNodeVulnerabilityTestSuite) SetupSuite() {
 	nodeCVEStore := nodeCVEPostgres.CreateTableAndNewStore(s.ctx, s.db, s.gormDB)
 	nodeCVEIndexer := nodeCVEPostgres.NewIndexer(s.db)
 	nodeCVESearcher := nodeCVESearch.New(nodeCVEStore, nodeCVEIndexer)
-	nodeCVEDatastore, err := nodeCVEDataStore.New(nodeCVEStore, nodeCVEIndexer, nodeCVESearcher, concurrency.NewKeyFence())
+	nodeCVEDatastore, err := nodeCVEDataStore.New(nodeCVEStore, nodeCVEIndexer, nodeCVESearcher, dackboxConcurrency.NewKeyFence())
 	s.NoError(err, "Failed to create nodeCVEDatastore")
 	s.resolver.NodeCVEDataStore = nodeCVEDatastore
 
@@ -125,8 +125,7 @@ func (s *GraphQLNodeVulnerabilityTestSuite) SetupSuite() {
 	nodeComponentCveEdgeStore := nodeComponentCVEEdgePostgres.CreateTableAndNewStore(s.ctx, s.db, s.gormDB)
 	nodeCompontCveEdgeIndexer := nodeComponentCVEEdgePostgres.NewIndexer(s.db)
 	nodeComponentCveEdgeSearcher := nodeComponentCVEEdgeSearch.New(nodeComponentCveEdgeStore, nodeCompontCveEdgeIndexer)
-	nodeComponentCveEdgeDatastore, err := nodeComponentCVEEdgeDataStore.New(nodeComponentCveEdgeStore, nodeCompontCveEdgeIndexer, nodeComponentCveEdgeSearcher)
-	s.NoError(err)
+	nodeComponentCveEdgeDatastore := nodeComponentCVEEdgeDataStore.New(nodeComponentCveEdgeStore, nodeCompontCveEdgeIndexer, nodeComponentCveEdgeSearcher)
 	s.resolver.NodeComponentCVEEdgeDataStore = nodeComponentCveEdgeDatastore
 
 	// cluster datastore

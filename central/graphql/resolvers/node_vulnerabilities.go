@@ -6,6 +6,7 @@ import (
 
 	"github.com/graph-gophers/graphql-go"
 	"github.com/pkg/errors"
+	"github.com/stackrox/rox/central/graphql/resolvers/embeddedobjs"
 	"github.com/stackrox/rox/central/graphql/resolvers/loaders"
 	"github.com/stackrox/rox/central/metrics"
 	v1 "github.com/stackrox/rox/generated/api/v1"
@@ -300,6 +301,11 @@ func (resolver *nodeCVEResolver) EnvImpact(ctx context.Context) (float64, error)
 func (resolver *nodeCVEResolver) FixedByVersion(_ context.Context) (string, error) {
 	defer metrics.SetGraphQLOperationDurationTime(time.Now(), pkgMetrics.NodeCVEs, "FixedByVersion")
 
+	// Short path. Full node is embedded when node scan resolver is called.
+	if embeddedVuln := embeddedobjs.NodeVulnFromContext(resolver.ctx); embeddedVuln != nil {
+		return embeddedVuln.GetFixedBy(), nil
+	}
+
 	scope, hasScope := scoped.GetScope(resolver.ctx)
 	if !hasScope {
 		return "", nil
@@ -318,6 +324,11 @@ func (resolver *nodeCVEResolver) FixedByVersion(_ context.Context) (string, erro
 // IsFixable returns whether node CVE is fixable by any component
 func (resolver *nodeCVEResolver) IsFixable(_ context.Context, args RawQuery) (bool, error) {
 	defer metrics.SetGraphQLOperationDurationTime(time.Now(), pkgMetrics.NodeCVEs, "IsFixable")
+
+	// Short path. Full node is embedded when node scan resolver is called.
+	if embeddedVuln := embeddedobjs.NodeVulnFromContext(resolver.ctx); embeddedVuln != nil {
+		return embeddedVuln.GetFixedBy() != "", nil
+	}
 
 	query, err := args.AsV1QueryOrEmpty(search.ExcludeFieldLabel(search.CVEID))
 	if err != nil {
@@ -348,6 +359,11 @@ func (resolver *nodeCVEResolver) IsFixable(_ context.Context, args RawQuery) (bo
 // LastScanned is the last time this node CVE was last scanned in a node
 func (resolver *nodeCVEResolver) LastScanned(ctx context.Context) (*graphql.Time, error) {
 	defer metrics.SetGraphQLOperationDurationTime(time.Now(), pkgMetrics.NodeCVEs, "LastScanned")
+
+	// Short path. Full node is embedded when node scan resolver is called.
+	if scanTime := embeddedobjs.NodeComponentLastScannedFromContext(resolver.ctx); scanTime != nil {
+		return timestamp(scanTime)
+	}
 
 	nodeLoader, err := loaders.GetNodeLoader(ctx)
 	if err != nil {

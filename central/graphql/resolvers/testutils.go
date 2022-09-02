@@ -9,6 +9,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/graph-gophers/graphql-go"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/pkg/errors"
 	imageComponentCVEEdgeDS "github.com/stackrox/rox/central/componentcveedge/datastore"
 	imageComponentCVEEdgePostgres "github.com/stackrox/rox/central/componentcveedge/datastore/store/postgres"
 	imageComponentCVEEdgeSearch "github.com/stackrox/rox/central/componentcveedge/search"
@@ -25,6 +26,7 @@ import (
 	imageComponentPostgres "github.com/stackrox/rox/central/imagecomponent/datastore/store/postgres"
 	imageComponentSearch "github.com/stackrox/rox/central/imagecomponent/search"
 	nodeDS "github.com/stackrox/rox/central/node/datastore/dackbox/datastore"
+	nodeGlobalDS "github.com/stackrox/rox/central/node/datastore/dackbox/globaldatastore"
 	nodeSearch "github.com/stackrox/rox/central/node/datastore/search"
 	nodePostgres "github.com/stackrox/rox/central/node/datastore/store/postgres"
 	nodeComponentDS "github.com/stackrox/rox/central/nodecomponent/datastore"
@@ -36,11 +38,14 @@ import (
 	"github.com/stackrox/rox/central/ranking"
 	mockRisks "github.com/stackrox/rox/central/risk/datastore/mocks"
 	"github.com/stackrox/rox/generated/storage"
+	"github.com/stackrox/rox/pkg/features"
 	"github.com/stackrox/rox/pkg/fixtures"
 	"github.com/stackrox/rox/pkg/grpc/authn"
 	mockIdentity "github.com/stackrox/rox/pkg/grpc/authn/mocks"
+	nodeConverter "github.com/stackrox/rox/pkg/nodes/converter"
 	"github.com/stackrox/rox/pkg/postgres/pgtest"
 	"github.com/stackrox/rox/pkg/sac"
+	"github.com/stackrox/rox/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 )
@@ -58,7 +63,7 @@ func setupPostgresConn(t testing.TB) (*pgxpool.Pool, *gorm.DB) {
 	return pool, gormDB
 }
 
-func setupResolverForImageGraphQLTests(
+func setupResolverForImageGraphQLTestsWithPostgres(
 	t testing.TB,
 	imageDataStore imageDS.DataStore,
 	imageComponentDataStore imageComponentDS.DataStore,
@@ -83,7 +88,7 @@ func setupResolverForImageGraphQLTests(
 	return resolver, schema
 }
 
-func createImageDatastore(_ testing.TB, ctrl *gomock.Controller, db *pgxpool.Pool, gormDB *gorm.DB) imageDS.DataStore {
+func createImageDatastoreForPostgres(_ testing.TB, ctrl *gomock.Controller, db *pgxpool.Pool, gormDB *gorm.DB) imageDS.DataStore {
 	ctx := context.Background()
 	imagePostgres.Destroy(ctx, db)
 
@@ -96,7 +101,7 @@ func createImageDatastore(_ testing.TB, ctrl *gomock.Controller, db *pgxpool.Poo
 	)
 }
 
-func createImageComponentDatastore(_ testing.TB, ctrl *gomock.Controller, db *pgxpool.Pool, gormDB *gorm.DB) imageComponentDS.DataStore {
+func createImageComponentDatastoreForPostgres(_ testing.TB, ctrl *gomock.Controller, db *pgxpool.Pool, gormDB *gorm.DB) imageComponentDS.DataStore {
 	ctx := context.Background()
 	imageComponentPostgres.Destroy(ctx, db)
 
@@ -110,7 +115,7 @@ func createImageComponentDatastore(_ testing.TB, ctrl *gomock.Controller, db *pg
 	)
 }
 
-func createImageCVEDatastore(t testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) imageCVEDS.DataStore {
+func createImageCVEDatastoreForPostgres(t testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) imageCVEDS.DataStore {
 	ctx := context.Background()
 	imageCVEPostgres.Destroy(ctx, db)
 
@@ -123,7 +128,7 @@ func createImageCVEDatastore(t testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) im
 	return datastore
 }
 
-func createImageComponentCVEEdgeDatastore(_ testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) imageComponentCVEEdgeDS.DataStore {
+func createImageComponentCVEEdgeDatastoreForPostgres(_ testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) imageComponentCVEEdgeDS.DataStore {
 	ctx := context.Background()
 	imageComponentCVEEdgePostgres.Destroy(ctx, db)
 
@@ -169,7 +174,40 @@ func contextWithImagePerm(t testing.TB, ctrl *gomock.Controller) context.Context
 	return authn.ContextWithIdentity(sac.WithAllAccess(loaders.WithLoaderContext(context.Background())), id, t)
 }
 
-func createNodeDatastore(_ testing.TB, ctrl *gomock.Controller, db *pgxpool.Pool, gormDB *gorm.DB) nodeDS.DataStore {
+func contextWithNodePerm(t testing.TB, ctrl *gomock.Controller) context.Context {
+	id := mockIdentity.NewMockIdentity(ctrl)
+	id.EXPECT().Permissions().Return(map[string]storage.Access{"Node": storage.Access_READ_ACCESS}).AnyTimes()
+	return authn.ContextWithIdentity(sac.WithAllAccess(loaders.WithLoaderContext(context.Background())), id, t)
+}
+
+func setupResolverForNodeGraphQLTestsWithPostgres(
+	t testing.TB,
+	nodeDataStore nodeDS.DataStore,
+	nodeComponentDataStore nodeComponentDS.DataStore,
+	cveDataStore nodeCVEDS.DataStore,
+	nodeComponentCVEEdgeDatastore nodeComponentCVEEdgeDS.DataStore,
+) *graphql.Schema {
+	// loaders used by graphql layer
+	registerNodeLoader(t, nodeDataStore)
+	registerNodeComponentLoader(t, nodeComponentDataStore)
+	registerNodeCveLoader(t, cveDataStore)
+
+	nodeGlobalDatastore, err := nodeGlobalDS.New(nodeDataStore)
+	assert.NoError(t, err)
+	resolver := &Resolver{
+		NodeGlobalDataStore:           nodeGlobalDatastore,
+		NodeComponentDataStore:        nodeComponentDataStore,
+		NodeCVEDataStore:              cveDataStore,
+		NodeComponentCVEEdgeDataStore: nodeComponentCVEEdgeDatastore,
+	}
+
+	schema, err := graphql.ParseSchema(Schema(), resolver)
+	assert.NoError(t, err)
+
+	return schema
+}
+
+func createNodeDatastoreForPostgres(_ testing.TB, ctrl *gomock.Controller, db *pgxpool.Pool, gormDB *gorm.DB) nodeDS.DataStore {
 	ctx := context.Background()
 	nodePostgres.Destroy(ctx, db)
 
@@ -180,7 +218,10 @@ func createNodeDatastore(_ testing.TB, ctrl *gomock.Controller, db *pgxpool.Pool
 	return nodeDS.NewWithPostgres(store, indexer, searcher, mockRisk, ranking.NewRanker(), ranking.NewRanker())
 }
 
-func createNodeComponentDatastore(_ testing.TB, ctrl *gomock.Controller, db *pgxpool.Pool, gormDB *gorm.DB) nodeComponentDS.DataStore {
+func createNodeComponentDatastoreForPostgres(_ testing.TB, ctrl *gomock.Controller, db *pgxpool.Pool, gormDB *gorm.DB) nodeComponentDS.DataStore {
+	if !features.PostgresDatastore.Enabled() {
+		utils.CrashOnError(errors.New("Cannot create datastore with postgres disabled"))
+	}
 	ctx := context.Background()
 	nodeComponentPostgres.Destroy(ctx, db)
 
@@ -192,7 +233,10 @@ func createNodeComponentDatastore(_ testing.TB, ctrl *gomock.Controller, db *pgx
 	return nodeComponentDS.New(store, indexer, searcher, mockRisk, ranking.NewRanker())
 }
 
-func createNodeCVEDatastore(t testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) nodeCVEDS.DataStore {
+func createNodeCVEDatastoreForPostgres(t testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) nodeCVEDS.DataStore {
+	if !features.PostgresDatastore.Enabled() {
+		utils.CrashOnError(errors.New("Cannot create datastore with postgres disabled"))
+	}
 	ctx := context.Background()
 	nodeCVEPostgres.Destroy(ctx, db)
 
@@ -205,7 +249,10 @@ func createNodeCVEDatastore(t testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) nod
 	return datastore
 }
 
-func NodeComponentCVEEdgeDatastore(_ testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) nodeComponentCVEEdgeDS.DataStore {
+func NodeComponentCVEEdgeDatastoreForPostgres(_ testing.TB, db *pgxpool.Pool, gormDB *gorm.DB) nodeComponentCVEEdgeDS.DataStore {
+	if !features.PostgresDatastore.Enabled() {
+		utils.CrashOnError(errors.New("Cannot create datastore with postgres disabled"))
+	}
 	ctx := context.Background()
 	nodeComponentCVEEdgePostgres.Destroy(ctx, db)
 
@@ -214,4 +261,34 @@ func NodeComponentCVEEdgeDatastore(_ testing.TB, db *pgxpool.Pool, gormDB *gorm.
 	searcher := nodeComponentCVEEdgeSearch.New(store, indexer)
 
 	return nodeComponentCVEEdgeDS.New(store, indexer, searcher)
+}
+
+func registerNodeLoader(_ testing.TB, ds nodeDS.DataStore) {
+	loaders.RegisterTypeFactory(reflect.TypeOf(storage.Node{}), func() interface{} {
+		return loaders.NewNodeLoader(ds)
+	})
+}
+
+func registerNodeComponentLoader(_ testing.TB, ds nodeComponentDS.DataStore) {
+	loaders.RegisterTypeFactory(reflect.TypeOf(storage.NodeComponent{}), func() interface{} {
+		return loaders.NewNodeComponentLoader(ds)
+	})
+}
+
+func registerNodeCveLoader(_ testing.TB, ds nodeCVEDS.DataStore) {
+	loaders.RegisterTypeFactory(reflect.TypeOf(storage.NodeCVE{}), func() interface{} {
+		return loaders.NewNodeCVELoader(ds)
+	})
+}
+
+func getTestNodesForPostgres(nodeCount int) []*storage.Node {
+	nodes := make([]*storage.Node, 0, nodeCount)
+	for i := 0; i < nodeCount; i++ {
+		node := fixtures.GetNodeWithUniqueComponents(100)
+		nodeConverter.MoveNodeVulnsToNewField(node)
+		id := fmt.Sprintf("%d", i)
+		node.Id = id
+		nodes = append(nodes, node)
+	}
+	return nodes
 }
