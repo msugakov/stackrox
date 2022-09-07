@@ -52,10 +52,11 @@ message NetworkEndpoint {
     ProcessReference originator      = 6;
 }
 
-message ProcessReference (
+message ProcessReference {
     string name           = 1;
     string agrgs          = 2;
     string exec_file_path = 3;
+}
 
 message NetworkAddress {
     bytes  address_data = 1;  // semantics determined by socket_family of the given connection

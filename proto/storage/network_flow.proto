@@ -5,6 +5,7 @@ option java_package = "io.stackrox.proto.storage";
 
 import "google/protobuf/timestamp.proto";
 import "gogoproto/gogo.proto";
+import "storage/process_indicator.proto";
 
 package storage;
 
@@ -32,15 +33,7 @@ message NetworkEndpoint {
 
   google.protobuf.Timestamp last_active_timestamp = 2;
 
-  ProcessIndicatorUniqueKey originator;
-}
-
-message ProcessReference {
-  string name;
-
-  string args;
-
-  string exec_file_path;
+  ProcessIndicatorUniqueKey originator = 3;
 }
 
 message NetworkEndpointProperties {
