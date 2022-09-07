@@ -31,6 +31,16 @@ message NetworkEndpoint {
   NetworkEndpointProperties props = 1;
 
   google.protobuf.Timestamp last_active_timestamp = 2;
+
+  ProcessIndicatorUniqueKey originator;
+}
+
+message ProcessReference {
+  string name;
+
+  string args;
+
+  string exec_file_path;
 }
 
 message NetworkEndpointProperties {
