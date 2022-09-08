@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+option go_package = "v1";
+option java_package = "io.stackrox.proto.api.v1";
+
+import weak "google/api/annotations.proto";
+import "storage/enpoint_indicator.proto";
+
+package v1;
+
+message GetEnpointsByDeploymentRequest {
+    string deployment_id = 1;
+}
+
+message GetEnpointsResponse {
+    repeated storage.NetworkEnpoint enpoints = 1;
+}
+
+message EnpointGroup {
+    string                    args    = 1;
+    repeated storage.NetworkEnpoint signals = 2;
+}
+
+message EnpointNameGroup {
+    repeated EnpointGroup groups         = 3;
+}
+
+message GetGroupedEnpointsResponse {
+    repeated EnpointNameGroup groups = 3;
+}
+
+message EnpointNameAndContainerNameGroup {
+    string                container_name = 2;
+    repeated EnpointGroup groups         = 4;
+}
+
+message GetGroupedEnpointsWithContainerResponse {
+    repeated EnpointNameAndContainerNameGroup groups = 3;
+}
+
+// EnpointService APIs can be used to list enpoints executed in deployments.
+service EnpointService {
+
+    // GetEnpointsByDeployment returns the enpoints executed in the given deployment.
+    rpc GetEnpointsByDeployment (GetEnpointsByDeploymentRequest) returns (GetEnpointsResponse) {
+        option (google.api.http) = {
+            get: "/v1/enpoints/deployment/{deployment_id}"
+        };
+    }
+
+    // GetGroupedEnpointByDeployment returns all the enpoints executed grouped by deployment.
+    rpc GetGroupedEnpointByDeployment (GetEnpointsByDeploymentRequest) returns (GetGroupedEnpointsResponse) {
+        option (google.api.http) = {
+            get: "/v1/enpoints/deployment/{deployment_id}/grouped"
+        };
+    }
+
+    // GetGroupedEnpointByDeploymentAndContainer returns all the enpoints executed grouped by deployment and container.
+    rpc GetGroupedEnpointByDeploymentAndContainer (GetEnpointsByDeploymentRequest) returns (GetGroupedEnpointsWithContainerResponse) {
+        option (google.api.http) = {
+            get: "/v1/enpoints/deployment/{deployment_id}/grouped/container"
+        };
+    }
+
+}
