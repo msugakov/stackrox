@@ -20,7 +20,7 @@ func RegisterNewReconciler(mgr ctrl.Manager) error {
 	proxyEnv := proxy.GetProxyEnvVars() // fix at startup time
 	return reconciler.SetupReconcilerWithManager(
 		mgr, platform.CentralGVK, image.CentralServicesChartPrefix,
-		proxy.InjectProxyEnvVars(translation.Translator{}, proxyEnv),
+		proxy.InjectProxyEnvVars(translation.Translator{}, proxyEnv, mgr.GetLogger()),
 		pkgReconciler.WithExtraWatch(
 			&source.Kind{Type: &platform.SecuredCluster{}},
 			handleSiblingCentrals(mgr),
