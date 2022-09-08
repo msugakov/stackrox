@@ -38,24 +38,24 @@ message GetGroupedEndpointsWithContainerResponse {
     repeated EndpointNameAndContainerNameGroup groups = 3;
 }
 
-// EndpointService APIs can be used to list endpoints executed in deployments.
+// EndpointService APIs can be used to list endpoints
 service EndpointService {
 
-    // GetEndpointsByDeployment returns the endpoints executed in the given deployment.
+    // GetEndpointsByDeployment returns the endpoints in the given deployment.
     rpc GetEndpointsByDeployment (GetEndpointsByDeploymentRequest) returns (GetEndpointsResponse) {
         option (google.api.http) = {
             get: "/v1/endpoints/deployment/{deployment_id}"
         };
     }
 
-    // GetGroupedEndpointByDeployment returns all the endpoints executed grouped by deployment.
+    // GetGroupedEndpointByDeployment returns all the endpoints grouped by deployment.
     rpc GetGroupedEndpointByDeployment (GetEndpointsByDeploymentRequest) returns (GetGroupedEndpointsResponse) {
         option (google.api.http) = {
             get: "/v1/endpoints/deployment/{deployment_id}/grouped"
         };
     }
 
-    // GetGroupedEndpointByDeploymentAndContainer returns all the endpoints executed grouped by deployment and container.
+    // GetGroupedEndpointByDeploymentAndContainer returns all the endpoints grouped by deployment and container.
     rpc GetGroupedEndpointByDeploymentAndContainer (GetEndpointsByDeploymentRequest) returns (GetGroupedEndpointsWithContainerResponse) {
         option (google.api.http) = {
             get: "/v1/endpoints/deployment/{deployment_id}/grouped/container"
