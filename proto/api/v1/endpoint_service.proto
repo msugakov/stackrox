@@ -13,12 +13,12 @@ message GetEnpointsByDeploymentRequest {
 }
 
 message GetEnpointsResponse {
-    repeated storage.NetworkEnpoint enpoints = 1;
+    repeated storage.NetworkEnpointWithProcess enpoints = 1;
 }
 
 message EnpointGroup {
-    string                    args    = 1;
-    repeated storage.NetworkEnpoint signals = 2;
+    string                    name    = 1;
+    repeated storage.NetworkEnpointWithProcess signals = 2;
 }
 
 message EnpointNameGroup {

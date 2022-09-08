@@ -36,6 +36,14 @@ message NetworkEndpoint {
   ProcessIndicatorUniqueKey originator = 3;
 }
 
+message NetworkEndpointWithProcess {
+  NetworkEndpointProperties props = 1;
+
+  google.protobuf.Timestamp last_active_timestamp = 2;
+
+  ProcessIndicator originator = 3;
+}
+
 message NetworkEndpointProperties {
   NetworkEntityInfo entity = 1;
   uint32 port              = 2;
