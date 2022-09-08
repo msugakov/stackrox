@@ -6,6 +6,7 @@ import objects.Deployment
 import org.junit.experimental.categories.Category
 import spock.lang.Unroll
 import util.Env
+import services.FeatureFlagService
 
 class GlobalSearch extends BaseSpecification {
     static final private List<SearchServiceOuterClass.SearchCategory> EXPECTED_DEPLOYMENT_CATEGORIES = []
