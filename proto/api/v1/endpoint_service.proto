@@ -4,61 +4,61 @@ option go_package = "v1";
 option java_package = "io.stackrox.proto.api.v1";
 
 import weak "google/api/annotations.proto";
-import "storage/enpoint_indicator.proto";
+import "storage/network_flow.proto";
 
 package v1;
 
-message GetEnpointsByDeploymentRequest {
+message GetEndpointsByDeploymentRequest {
     string deployment_id = 1;
 }
 
-message GetEnpointsResponse {
-    repeated storage.NetworkEnpointWithProcess enpoints = 1;
+message GetEndpointsResponse {
+    repeated storage.NetworkEndpointWithProcess endpoints = 1;
 }
 
-message EnpointGroup {
+message EndpointGroup {
     string                    name    = 1;
-    repeated storage.NetworkEnpointWithProcess signals = 2;
+    repeated storage.NetworkEndpointWithProcess signals = 2;
 }
 
-message EnpointNameGroup {
-    repeated EnpointGroup groups         = 3;
+message EndpointNameGroup {
+    repeated EndpointGroup groups         = 3;
 }
 
-message GetGroupedEnpointsResponse {
-    repeated EnpointNameGroup groups = 3;
+message GetGroupedEndpointsResponse {
+    repeated EndpointNameGroup groups = 3;
 }
 
-message EnpointNameAndContainerNameGroup {
+message EndpointNameAndContainerNameGroup {
     string                container_name = 2;
-    repeated EnpointGroup groups         = 4;
+    repeated EndpointGroup groups         = 4;
 }
 
-message GetGroupedEnpointsWithContainerResponse {
-    repeated EnpointNameAndContainerNameGroup groups = 3;
+message GetGroupedEndpointsWithContainerResponse {
+    repeated EndpointNameAndContainerNameGroup groups = 3;
 }
 
-// EnpointService APIs can be used to list enpoints executed in deployments.
-service EnpointService {
+// EndpointService APIs can be used to list endpoints executed in deployments.
+service EndpointService {
 
-    // GetEnpointsByDeployment returns the enpoints executed in the given deployment.
-    rpc GetEnpointsByDeployment (GetEnpointsByDeploymentRequest) returns (GetEnpointsResponse) {
+    // GetEndpointsByDeployment returns the endpoints executed in the given deployment.
+    rpc GetEndpointsByDeployment (GetEndpointsByDeploymentRequest) returns (GetEndpointsResponse) {
         option (google.api.http) = {
-            get: "/v1/enpoints/deployment/{deployment_id}"
+            get: "/v1/endpoints/deployment/{deployment_id}"
         };
     }
 
-    // GetGroupedEnpointByDeployment returns all the enpoints executed grouped by deployment.
-    rpc GetGroupedEnpointByDeployment (GetEnpointsByDeploymentRequest) returns (GetGroupedEnpointsResponse) {
+    // GetGroupedEndpointByDeployment returns all the endpoints executed grouped by deployment.
+    rpc GetGroupedEndpointByDeployment (GetEndpointsByDeploymentRequest) returns (GetGroupedEndpointsResponse) {
         option (google.api.http) = {
-            get: "/v1/enpoints/deployment/{deployment_id}/grouped"
+            get: "/v1/endpoints/deployment/{deployment_id}/grouped"
         };
     }
 
-    // GetGroupedEnpointByDeploymentAndContainer returns all the enpoints executed grouped by deployment and container.
-    rpc GetGroupedEnpointByDeploymentAndContainer (GetEnpointsByDeploymentRequest) returns (GetGroupedEnpointsWithContainerResponse) {
+    // GetGroupedEndpointByDeploymentAndContainer returns all the endpoints executed grouped by deployment and container.
+    rpc GetGroupedEndpointByDeploymentAndContainer (GetEndpointsByDeploymentRequest) returns (GetGroupedEndpointsWithContainerResponse) {
         option (google.api.http) = {
-            get: "/v1/enpoints/deployment/{deployment_id}/grouped/container"
+            get: "/v1/endpoints/deployment/{deployment_id}/grouped/container"
         };
     }
 
