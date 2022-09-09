@@ -79,6 +79,14 @@
         "run_on_master": "true",
         "run_on_tags": "true"
     },
+    "gke-postgres-upgrade-tests": {
+        "run_with_labels": ["ci-postgres-tests"],
+        "skip_with_label": "",
+        "run_with_changed_path": "^migrator/.*$|^image/",
+        "changed_path_to_ignore": "",
+        "run_on_master": "true",
+        "run_on_tags": "false"
+    },
     "gke-ui-e2e-tests": {
         "run_with_labels": [],
         "skip_with_label": "ci-no-ui-tests",
