@@ -73,6 +73,9 @@ class GlobalSearch extends BaseSpecification {
         }
 
         when:
+        Assume.assumeTrue(FeatureFlagService.isFeatureFlagEnabled("ROX_NEW_POLICY_CATEGORIES"))
+        Assume.assumeTrue(FeatureFlagService.isFeatureFlagEnabled("ROX_POSTGRES_DATASTORE"))
+
         "Run a global search request"
         SearchServiceOuterClass.SearchResponse searchResponse = null
         Set<SearchServiceOuterClass.SearchCategory> presentCategories = null
@@ -89,20 +92,6 @@ class GlobalSearch extends BaseSpecification {
         then:
         "Verify that the search response contains what we expect"
         assert !searchResponse?.resultsList?.empty
-
-        // If the test case has an expectedResultPrefix, assert that the result starts with the prefix.
-        // Doing a prefix match instead of an exact match because we do prefix search, and if a query happens
-        // to match something else.
-        // If category feature flag is set, policy categories show up as valid search results, however, policy
-        // category names do not match in prefix with policy names
-        if (!FeatureFlagService.isFeatureFlagEnabled("ROX_NEW_POLICY_CATEGORIES")) {
-            if (expectedResultPrefix.size() > 0) {
-                searchResponse.resultsList.each {
-                    assert it.name.startsWith(expectedResultPrefix)
-                }
-            }
-        }
-
         assert expectedCategoriesSet == presentCategories
 
         where:
