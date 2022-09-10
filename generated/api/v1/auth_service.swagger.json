@@ -210,7 +210,8 @@
         "BENCHMARK_SERVICE",
         "SCANNER_SERVICE",
         "SCANNER_DB_SERVICE",
-        "ADMISSION_CONTROL_SERVICE"
+        "ADMISSION_CONTROL_SERVICE",
+        "CENTRAL_DB_SERVICE"
       ],
       "default": "UNKNOWN_SERVICE"
     },

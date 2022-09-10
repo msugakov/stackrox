@@ -32,6 +32,10 @@ type CentralSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,order=1,displayName="Central Component Settings"
 	Central *CentralComponentSpec `json:"central,omitempty"`
 
+	// Settings for the Central DB component, which is responsible for data persistence.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,order=5,displayName="Central Component Settings"
+	CentralDB *CentralDBComponentSpec `json:"centralDB,omitempty"`
+
 	// Settings for the Scanner component, which is responsible for vulnerability scanning of container
 	// images.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,order=2,displayName="Scanner Component Settings"
@@ -119,35 +123,12 @@ type CentralComponentSpec struct {
 	DeploymentSpec `json:",inline"`
 }
 
-// GetHostPath returns Central's configured host path
-func (c *CentralComponentSpec) GetHostPath() string {
-	if c == nil {
-		return ""
-	}
-	if c.Persistence == nil {
-		return ""
-	}
-	if c.Persistence.HostPath == nil {
-		return ""
-	}
-
-	return pointer.StringPtrDerefOr(c.Persistence.HostPath.Path, "")
-}
-
 // GetPersistence returns Central's persistence config
 func (c *CentralComponentSpec) GetPersistence() *Persistence {
 	if c == nil {
 		return nil
 	}
 	return c.Persistence
-}
-
-// GetPersistentVolumeClaim returns Central's configured PVC
-func (c *CentralComponentSpec) GetPersistentVolumeClaim() *PersistentVolumeClaim {
-	if c.GetPersistence() == nil {
-		return nil
-	}
-	return c.GetPersistence().PersistentVolumeClaim
 }
 
 // GetAdminPasswordSecret provides a way to retrieve the admin password that is safe to use on a nil receiver object.
@@ -166,6 +147,48 @@ func (c *CentralComponentSpec) GetAdminPasswordGenerationDisabled() bool {
 	return pointer.BoolPtrDerefOr(c.AdminPasswordGenerationDisabled, false)
 }
 
+// CentralDBComponentSpec defines settings for the "central db" component.
+type CentralDBComponentSpec struct {
+	// Specify a secret that contains the password in the "password" data item.
+	// If omitted, the operator will auto-generate a DB password and store it in the "password" item
+	// in the "central-db-password" secret.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Administrator Password",order=1
+	PasswordSecret *LocalSecretReference `json:"passwordSecret,omitempty"`
+
+	// Disable admin password generation. Do not use this for first-time installations,
+	// as you will have no way to perform initial setup and configuration of alternative authentication methods.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,xDescriptors={"urn:alm:descriptor:com.tectonic.ui:hidden"}
+	PasswordGenerationDisabled *bool `json:"passwordGenerationDisabled,omitempty"`
+
+	// Specify a connection string that corresponds to an existing database. If set, the operator will not manage Central DB
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,order=2
+	ConnectionStringOverride *string `json:"connectionString,omitempty"`
+
+	// Configures how Central should store its persistent data. You can choose between using a persistent
+	// volume claim (recommended default), and a host path.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,order=5
+	Persistence *Persistence `json:"persistence,omitempty"`
+
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,order=99
+	DeploymentSpec `json:",inline"`
+}
+
+// Preexisting ...
+func (c *CentralDBComponentSpec) Preexisting() bool {
+	if c == nil {
+		return false
+	}
+	return c.ConnectionStringOverride != nil
+}
+
+// GetPersistence returns the persistence for Central DB
+func (c *CentralDBComponentSpec) GetPersistence() *Persistence {
+	if c == nil {
+		return nil
+	}
+	return c.Persistence
+}
+
 // Persistence defines persistence settings for central.
 type Persistence struct {
 	// Uses a Kubernetes persistent volume claim (PVC) to manage the storage location of persistent data.
@@ -177,6 +200,26 @@ type Persistence struct {
 	// be used together with a node selector (only available in YAML view).
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Host path",order=99
 	HostPath *HostPathSpec `json:"hostPath,omitempty"`
+}
+
+// GetPersistentVolumeClaim returns the configured PVC
+func (p *Persistence) GetPersistentVolumeClaim() *PersistentVolumeClaim {
+	if p == nil {
+		return nil
+	}
+	return p.PersistentVolumeClaim
+}
+
+// GetHostPath returns the configured host path
+func (p *Persistence) GetHostPath() string {
+	if p == nil {
+		return ""
+	}
+	if p.HostPath == nil {
+		return ""
+	}
+
+	return pointer.StringPtrDerefOr(p.HostPath.Path, "")
 }
 
 // HostPathSpec defines settings for host path config.

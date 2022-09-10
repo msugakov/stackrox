@@ -30,6 +30,7 @@ enum ServiceType {
     SCANNER_SERVICE           = 9;
     SCANNER_DB_SERVICE        = 10;
     ADMISSION_CONTROL_SERVICE = 11;
+    CENTRAL_DB_SERVICE        = 12;
 }
 
 message ServiceCertificate {
