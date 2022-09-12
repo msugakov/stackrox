@@ -53,15 +53,15 @@ class PostgresUpgradeTest(BaseTest):
     TEST_OUTPUT_DIR = "/tmp/upgrade-test-logs"
 
     def run(self):
-        print("Executing the Upgrade Test")
+        print("Executing the Postgres Upgrade Test")
 
         def set_dirs_after_start():
             # let post test know where logs are
-            self.test_outputs = [UpgradeTest.TEST_OUTPUT_DIR]
+            self.test_outputs = [PostgresUpgradeTest.TEST_OUTPUT_DIR]
 
         self.run_with_graceful_kill(
-            ["tests/upgrade/postgres_run.sh", UpgradeTest.TEST_OUTPUT_DIR],
-            UpgradeTest.TEST_TIMEOUT,
+            ["tests/upgrade/postgres_run.sh", PostgresUpgradeTest.TEST_OUTPUT_DIR],
+            PostgresUpgradeTest.TEST_TIMEOUT,
             post_start_hook=set_dirs_after_start,
         )
 
