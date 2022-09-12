@@ -33,7 +33,16 @@ message NetworkEndpoint {
 
   google.protobuf.Timestamp last_active_timestamp = 2;
 
-  ProcessIndicatorUniqueKey originator = 3;
+  string pod_id               = 3;
+  string container_name       = 4;
+
+  ProcessReference originator = 5;
+}
+
+message ProcessReference {
+    string name           = 1;
+    string agrgs          = 2;
+    string exec_file_path = 3;
 }
 
 message NetworkEndpointWithProcess {
