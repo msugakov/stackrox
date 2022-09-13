@@ -15,7 +15,7 @@ source "$TEST_ROOT/tests/e2e/lib.sh"
 source "$TEST_ROOT/tests/upgrade/lib.sh"
 
 test_upgrade() {
-    info "Starting Postgres upgrade test"
+    info "Starting Postgres upgrade test -- postgres_run"
 
     if [[ "$#" -ne 1 ]]; then
         die "missing args. usage: test_upgrade <log-output-dir>"
@@ -51,15 +51,34 @@ test_upgrade() {
 preamble() {
     info "Starting test preamble"
 
+    # if is_darwin; then
+    #     TEST_HOST_OS="darwin"
+    # elif is_linux; then
+    #     TEST_HOST_OS="linux"
+    # else
+    #     die "Only linux or darwin are supported for this test"
+    # fi
+    #
+    # require_executable "$TEST_ROOT/bin/$TEST_HOST_OS/roxctl"
+
+    local host_os
     if is_darwin; then
-        TEST_HOST_OS="darwin"
+        host_os="darwin"
     elif is_linux; then
-        TEST_HOST_OS="linux"
+        host_os="linux"
     else
         die "Only linux or darwin are supported for this test"
     fi
 
-    require_executable "$TEST_ROOT/bin/$TEST_HOST_OS/roxctl"
+    case "$(uname -m)" in
+        x86_64) TEST_HOST_PLATFORM="${host_os}_amd64" ;;
+        aarch64) TEST_HOST_PLATFORM="${host_os}_arm64" ;;
+        ppc64le) TEST_HOST_PLATFORM="${host_os}_ppc64le" ;;
+        s390x) TEST_HOST_PLATFORM="${host_os}_s390x" ;;
+        *) die "Unknown architecture" ;;
+    esac
+
+    require_executable "$TEST_ROOT/bin/${TEST_HOST_PLATFORM}/roxctl"
 
     info "Will clone or update a clean copy of the rox repo for test at $REPO_FOR_TIME_TRAVEL"
     if [[ -d "$REPO_FOR_TIME_TRAVEL" ]]; then
@@ -79,6 +98,7 @@ preamble() {
     else
         require_executable yq
     fi
+    info "End test preamble"
 }
 
 test_upgrade_paths() {
