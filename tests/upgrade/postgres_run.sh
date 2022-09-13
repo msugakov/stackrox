@@ -117,14 +117,19 @@ test_upgrade_paths() {
     cd "$REPO_FOR_TIME_TRAVEL"
     git checkout "$EARLIER_SHA"
 
+    info "Deploy early central"
     deploy_earlier_central
+    info "Waiting for early central to be ready"
     wait_for_api
 
     export API_TOKEN="$(roxcurl /v1/apitokens/generate -d '{"name": "helm-upgrade-test", "role": "Admin"}' | jq -r '.token')"
 
     cd "$TEST_ROOT"
+    info "Helm Upgrade of Central"
     helm_upgrade_to_current_with_postgres
+    info "Waiting for upgraded central to be ready"
     wait_for_api
+
 
     info "Waiting for scanner to be ready"
     wait_for_scanner_to_be_ready
