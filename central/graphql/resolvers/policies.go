@@ -252,7 +252,19 @@ func (resolver *policyResolver) PolicyStatus(ctx context.Context, args RawQuery)
 		return "", nil
 	}
 
-	q, err := args.AsV1QueryOrEmpty()
+	var err error
+	q := search.EmptyQuery()
+	if scope, hasScope := scoped.GetScope(resolver.ctx); hasScope {
+		if field, ok := idField[scope.Level]; ok {
+			q = search.NewQueryBuilder().AddExactMatches(field, scope.ID).ProtoQuery()
+		}
+	} else {
+		if q, err = args.AsV1QueryOrEmpty(); err != nil {
+			return "", err
+		}
+	}
+
+	q, err = search.AddAsConjunction(q, resolver.getPolicyQuery())
 	if err != nil {
 		return "", err
 	}

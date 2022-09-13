@@ -113,7 +113,7 @@ func deployTimeAlertExists(ctx context.Context, root *Resolver, q *v1.Query) (bo
 		AddExactMatches(search.ViolationState, storage.ViolationState_ACTIVE.String()).
 		AddExactMatches(search.LifecycleStage, storage.LifecycleStage_DEPLOY.String()).
 		ProtoQuery()
-	
+
 	q = search.ConjunctionQuery(q, alertsQuery)
 	count, err := root.ViolationsDataStore.Count(ctx, q)
 	return count > 0, err
