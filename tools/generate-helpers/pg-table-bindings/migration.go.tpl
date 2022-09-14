@@ -8,6 +8,7 @@ package n{{.Migration.MigrateSequence}}ton{{add .Migration.MigrateSequence 1}}
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -63,6 +64,11 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 	ctx := sac.WithAllAccess(context.Background())
 	store := pgStore.New({{if .Migration.SingletonStore}}ctx, {{end}}postgresDB)
 	pkgSchema.ApplySchemaForTable(context.Background(), gormDB, schema.Table)
+	_, err := postgresDB.Exec(ctx, fmt.Sprintf("ALTER TABLE %s DISABLE TRIGGER ALL", schema.Table))
+	if err != nil {
+		log.WriteToStderrf("failed to disable triggers for %s", schema.Table)
+		return err
+	}
 	{{- if .Migration.SingletonStore}}
 	obj, found, err := legacyStore.Get(ctx)
 	if err != nil {
@@ -80,7 +86,7 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 	{{- /* Assume rocksdb and postgres agrees on if it should have GetAll function. Not acurate but works well. */}}
 	{{- if or $rocksDB (not .GetAll) }}
 	var {{.Table|lowerCamelCase}} []*{{.Type}}
-	err := walk(ctx, legacyStore, func(obj *{{.Type}}) error {
+	err = walk(ctx, legacyStore, func(obj *{{.Type}}) error {
 		{{.Table|lowerCamelCase}} = append({{.Table|lowerCamelCase}}, obj)
 		if len({{.Table|lowerCamelCase}}) == batchSize {
 			if err := store.UpsertMany(ctx, {{.Table|lowerCamelCase}}); err != nil {
@@ -104,6 +110,11 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 		}
 	}
 	{{- end}}
+	_, err = postgresDB.Exec(ctx, fmt.Sprintf("ALTER TABLE %s ENABLE TRIGGER ALL", schema.Table))
+	if err != nil {
+		log.WriteToStderrf("failed to enable triggers for %s", schema.Table)
+		return err
+	}
 	return nil
 }
 {{if and (not .Migration.SingletonStore) (or $rocksDB (not .GetAll))}}
