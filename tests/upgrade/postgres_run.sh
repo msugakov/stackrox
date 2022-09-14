@@ -147,7 +147,7 @@ test_upgrade_paths() {
 
     info "Fetching a sensor bundle for cluster 'remote'"
     rm -rf sensor-remote
-    "$TEST_ROOT/bin/$TEST_HOST_OS/roxctl" -e "$API_ENDPOINT" -p "$ROX_PASSWORD" sensor get-bundle remote
+    "$TEST_ROOT/bin/$TEST_HOST_PLATFORM/roxctl" -e "$API_ENDPOINT" -p "$ROX_PASSWORD" sensor get-bundle remote
     [[ -d sensor-remote ]]
 
     info "Installing sensor"
@@ -173,16 +173,16 @@ test_upgrade_paths() {
 deploy_earlier_central() {
     info "Deploying: $EARLIER_TAG..."
 
-    mkdir -p "bin/$TEST_HOST_OS"
+    mkdir -p "bin/$TEST_HOST_PLATFORM"
     if is_CI; then
-        gsutil cp "gs://stackrox-ci/roxctl-$EARLIER_TAG" "bin/$TEST_HOST_OS/roxctl"
+        gsutil cp "gs://stackrox-ci/roxctl-$EARLIER_TAG" "bin/$TEST_HOST_PLATFORM/roxctl"
     else
         make cli
     fi
-    chmod +x "bin/$TEST_HOST_OS/roxctl"
-    PATH="bin/$TEST_HOST_OS:$PATH" command -v roxctl
-    PATH="bin/$TEST_HOST_OS:$PATH" roxctl version
-    PATH="bin/$TEST_HOST_OS:$PATH" \
+    chmod +x "bin/$TEST_HOST_PLATFORM/roxctl"
+    PATH="bin/$TEST_HOST_PLATFORM:$PATH" command -v roxctl
+    PATH="bin/$TEST_HOST_PLATFORM:$PATH" roxctl version
+    PATH="bin/$TEST_HOST_PLATFORM:$PATH" \
     MAIN_IMAGE_TAG="$EARLIER_TAG" \
     SCANNER_IMAGE="$REGISTRY/scanner:$(cat SCANNER_VERSION)" \
     SCANNER_DB_IMAGE="$REGISTRY/scanner-db:$(cat SCANNER_VERSION)" \
