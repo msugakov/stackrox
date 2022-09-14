@@ -3,7 +3,6 @@ package n42ton43
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -44,13 +43,8 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 	ctx := sac.WithAllAccess(context.Background())
 	store := pgStore.New(postgresDB)
 	pkgSchema.ApplySchemaForTable(context.Background(), gormDB, schema.Table)
-	_, err := postgresDB.Exec(ctx, fmt.Sprintf("ALTER TABLE %s DISABLE TRIGGER ALL", schema.Table))
-	if err != nil {
-		log.WriteToStderrf("failed to disable triggers for %s", schema.Table)
-		return err
-	}
 	var processIndicators []*storage.ProcessIndicator
-	err = walk(ctx, legacyStore, func(obj *storage.ProcessIndicator) error {
+	err := walk(ctx, legacyStore, func(obj *storage.ProcessIndicator) error {
 		processIndicators = append(processIndicators, obj)
 		if len(processIndicators) == batchSize {
 			if err := store.UpsertMany(ctx, processIndicators); err != nil {
@@ -69,11 +63,6 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 			log.WriteToStderrf("failed to persist process_indicators to store %v", err)
 			return err
 		}
-	}
-	_, err = postgresDB.Exec(ctx, fmt.Sprintf("ALTER TABLE %s ENABLE TRIGGER ALL", schema.Table))
-	if err != nil {
-		log.WriteToStderrf("failed to enable triggers for %s", schema.Table)
-		return err
 	}
 	return nil
 }

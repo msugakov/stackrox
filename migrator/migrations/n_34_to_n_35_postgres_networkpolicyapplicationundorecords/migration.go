@@ -3,7 +3,6 @@ package n34ton35
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -41,13 +40,8 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 	ctx := sac.WithAllAccess(context.Background())
 	store := pgStore.New(postgresDB)
 	pkgSchema.ApplySchemaForTable(context.Background(), gormDB, schema.Table)
-	_, err := postgresDB.Exec(ctx, fmt.Sprintf("ALTER TABLE %s DISABLE TRIGGER ALL", schema.Table))
-	if err != nil {
-		log.WriteToStderrf("failed to disable triggers for %s", schema.Table)
-		return err
-	}
 	var networkpolicyapplicationundorecords []*storage.NetworkPolicyApplicationUndoRecord
-	err = walk(ctx, legacyStore, func(obj *storage.NetworkPolicyApplicationUndoRecord) error {
+	err := walk(ctx, legacyStore, func(obj *storage.NetworkPolicyApplicationUndoRecord) error {
 		networkpolicyapplicationundorecords = append(networkpolicyapplicationundorecords, obj)
 		if len(networkpolicyapplicationundorecords) == batchSize {
 			if err := store.UpsertMany(ctx, networkpolicyapplicationundorecords); err != nil {
@@ -66,11 +60,6 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 			log.WriteToStderrf("failed to persist networkpolicyapplicationundorecords to store %v", err)
 			return err
 		}
-	}
-	_, err = postgresDB.Exec(ctx, fmt.Sprintf("ALTER TABLE %s ENABLE TRIGGER ALL", schema.Table))
-	if err != nil {
-		log.WriteToStderrf("failed to enable triggers for %s", schema.Table)
-		return err
 	}
 	return nil
 }

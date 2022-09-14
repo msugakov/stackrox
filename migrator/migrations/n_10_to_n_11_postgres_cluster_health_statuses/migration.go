@@ -3,7 +3,6 @@ package n10ton11
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -32,6 +31,10 @@ var (
 				return errors.Wrap(err,
 					"moving cluster_health_statuses from rocksdb to postgres")
 			}
+			if err := prune(databases.PostgresDB); err != nil {
+				return errors.Wrap(err,
+					"pruning cluster_health_statuses")
+			}
 			return nil
 		},
 	}
@@ -44,13 +47,8 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 	ctx := sac.WithAllAccess(context.Background())
 	store := pgStore.New(postgresDB)
 	pkgSchema.ApplySchemaForTable(context.Background(), gormDB, schema.Table)
-	_, err := postgresDB.Exec(ctx, fmt.Sprintf("ALTER TABLE %s DISABLE TRIGGER ALL", schema.Table))
-	if err != nil {
-		log.WriteToStderrf("failed to disable triggers for %s", schema.Table)
-		return err
-	}
 	var clusterHealthStatuses []*storage.ClusterHealthStatus
-	err = walk(ctx, legacyStore, func(obj *storage.ClusterHealthStatus) error {
+	err := walk(ctx, legacyStore, func(obj *storage.ClusterHealthStatus) error {
 		clusterHealthStatuses = append(clusterHealthStatuses, obj)
 		if len(clusterHealthStatuses) == batchSize {
 			if err := store.UpsertMany(ctx, clusterHealthStatuses); err != nil {
@@ -70,16 +68,25 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 			return err
 		}
 	}
-	_, err = postgresDB.Exec(ctx, fmt.Sprintf("ALTER TABLE %s ENABLE TRIGGER ALL", schema.Table))
-	if err != nil {
-		log.WriteToStderrf("failed to enable triggers for %s", schema.Table)
-		return err
-	}
 	return nil
 }
 
 func walk(ctx context.Context, s legacy.Store, fn func(obj *storage.ClusterHealthStatus) error) error {
 	return s.Walk(ctx, fn)
+}
+
+func prune(postgresDB *pgxpool.Pool) error {
+	ctx := sac.WithAllAccess(context.Background())
+	deleteStmt := `DELETE FROM cluster_health_statuses child WHERE NOT EXISTS
+		(SELECT * FROM clusters parent WHERE
+		child.Id = parent.Id)`
+	log.WriteToStderr(deleteStmt)
+	_, err := postgresDB.Exec(ctx, deleteStmt)
+	if err != nil {
+		log.WriteToStderrf("failed to clean up orphaned data for %s", schema.Table)
+		return err
+	}
+	return nil
 }
 
 func init() {

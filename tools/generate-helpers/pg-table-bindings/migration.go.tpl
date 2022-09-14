@@ -2,13 +2,13 @@
 package n{{.Migration.MigrateSequence}}ton{{add .Migration.MigrateSequence 1}}
 {{- $ := . }}
 {{- $name := .TrimmedType|lowerCamelCase }}
+{{- $table := .Table|lowerCase }}
 {{ $boltDB := eq .Migration.MigrateFromDB "boltdb" }}
 {{ $dackbox := eq .Migration.MigrateFromDB "dackbox" }}
 {{ $rocksDB := or $dackbox (eq .Migration.MigrateFromDB "rocksdb") }}
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -50,6 +50,12 @@ var (
 				return errors.Wrap(err,
 					"moving {{.Table|lowerCase}} from rocksdb to postgres")
 			}
+			{{- if gt (len .Schema.RelationshipsToDefineAsForeignKeys) 0 }}
+			if err := prune(databases.PostgresDB); err != nil {
+				return errors.Wrap(err,
+				"pruning {{.Table|lowerCase}}")
+			}
+			{{- end}}
 			return nil
 		},
 	}
@@ -64,11 +70,6 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 	ctx := sac.WithAllAccess(context.Background())
 	store := pgStore.New({{if .Migration.SingletonStore}}ctx, {{end}}postgresDB)
 	pkgSchema.ApplySchemaForTable(context.Background(), gormDB, schema.Table)
-	_, err := postgresDB.Exec(ctx, fmt.Sprintf("ALTER TABLE %s DISABLE TRIGGER ALL", schema.Table))
-	if err != nil {
-		log.WriteToStderrf("failed to disable triggers for %s", schema.Table)
-		return err
-	}
 	{{- if .Migration.SingletonStore}}
 	obj, found, err := legacyStore.Get(ctx)
 	if err != nil {
@@ -86,7 +87,7 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 	{{- /* Assume rocksdb and postgres agrees on if it should have GetAll function. Not acurate but works well. */}}
 	{{- if or $rocksDB (not .GetAll) }}
 	var {{.Table|lowerCamelCase}} []*{{.Type}}
-	err = walk(ctx, legacyStore, func(obj *{{.Type}}) error {
+	err := walk(ctx, legacyStore, func(obj *{{.Type}}) error {
 		{{.Table|lowerCamelCase}} = append({{.Table|lowerCamelCase}}, obj)
 		if len({{.Table|lowerCamelCase}}) == batchSize {
 			if err := store.UpsertMany(ctx, {{.Table|lowerCamelCase}}); err != nil {
@@ -110,11 +111,6 @@ func move(gormDB *gorm.DB, postgresDB *pgxpool.Pool, legacyStore legacy.Store) e
 		}
 	}
 	{{- end}}
-	_, err = postgresDB.Exec(ctx, fmt.Sprintf("ALTER TABLE %s ENABLE TRIGGER ALL", schema.Table))
-	if err != nil {
-		log.WriteToStderrf("failed to enable triggers for %s", schema.Table)
-		return err
-	}
 	return nil
 }
 {{if and (not .Migration.SingletonStore) (or $rocksDB (not .GetAll))}}
@@ -153,6 +149,23 @@ func store_walk(ctx context.Context, s legacy.Store, fn func(obj *{{.Type}}) err
 	return nil
 }
 {{end}}
+{{- if gt (len (.Schema.RelationshipsToDefineAsForeignKeys)) 0 }}
+func prune(postgresDB *pgxpool.Pool) error {
+{{- range $idx, $rel := .Schema.RelationshipsToDefineAsForeignKeys }}
+	ctx := sac.WithAllAccess(context.Background())
+	deleteStmt := `DELETE FROM {{$table}} child WHERE NOT EXISTS
+		(SELECT * FROM {{$rel.OtherSchema.Table}} parent WHERE
+		{{range $idx2, $col := $rel.MappedColumnNames}}{{if $idx2}} AND {{end}}child.{{ $col.ColumnNameInThisSchema }} = parent.{{ $col.ColumnNameInOtherSchema }}{{end}})`
+	log.WriteToStderr(deleteStmt)
+	_, err := postgresDB.Exec(ctx, deleteStmt)
+	if err != nil {
+	log.WriteToStderrf("failed to clean up orphaned data for %s", schema.Table)
+	return err
+	}
+	return nil
+{{- end}}
+}
+{{- end}}
 
 func init() {
 	migrations.MustRegisterMigration(migration)
