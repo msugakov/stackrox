@@ -11,10 +11,6 @@ metadata:
     # The branch or tag we are targeting (ie: main, refs/tags/*)
     pipelinesascode.tekton.dev/on-target-branch: "[refs/heads/*]"
 
-    # Fetch the git-clone task from hub, we are able to reference later on it
-    # with taskRef and it will automatically be embedded into our pipeline.
-    pipelinesascode.tekton.dev/task: "git-clone"
-
     # Task for Golang
     pipelinesascode.tekton.dev/task-1: "[golangci-lint]"
 
@@ -51,7 +47,7 @@ spec:
           - name: revision
           steps:
           - name: do-the-git-clone-damn-you
-            image: registry.access.redhat.com/ubi8/toolbox
+            image: quay.io/stackrox-io/apollo-ci:stackrox-build-0.3.46
             script: |
               rm -rf $(workspaces.output.path)/$(params.subdirectory)
               mkdir -p $(workspaces.output.path)/$(params.subdirectory)
